@@ -1,0 +1,6 @@
+begin_tile_map
+data\images\world\tile.bmp 200 0 0
+data\images\world\tile2.bmp 232 0 2
+data\images\world\tile2.bmp 264 0 2
+data\images\world\tile.bmp 296 0 0
+end_tile_map

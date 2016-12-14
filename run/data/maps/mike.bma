@@ -1,0 +1,27 @@
+begin_map
+tile data\images\world\land\Grass3x3seamless.bmp -128 288
+tile data\images\world\land\Grass3x3seamless.bmp 128 288
+tile data\images\world\land\Grass3x3seamless.bmp -128 32
+tile data\images\world\land\Grass3x3seamless.bmp 128 32
+tile data\images\world\land\Grass3x3seamless.bmp -128 -224
+tile data\images\world\land\Grass3x3seamless.bmp 128 -224
+tile data\images\world\land\Grass3x3seamless.bmp 384 -224
+tile data\images\world\land\Grass3x3seamless.bmp 384 32
+tile data\images\world\land\Grass3x3seamless.bmp 384 288
+tile data\images\world\land\Grass3x3seamless.bmp -384 288
+tile data\images\world\land\Grass3x3seamless.bmp -384 32
+tile data\images\world\land\Grass3x3seamless.bmp -384 -224
+tile data\images\world\land\Grass3x3seamless.bmp 640 288
+tile data\images\world\land\Grass3x3seamless.bmp 640 32
+tile data\images\world\land\Grass3x3seamless.bmp 640 -224
+tile data\images\world\land\Grass3x3seamless.bmp 896 32
+tile data\images\world\land\Grass3x3seamless.bmp 896 288
+tile data\images\world\masonry\towers\HWall.bmp 128 32
+tile data\images\world\masonry\towers\HWall.bmp 384 32
+tile data\images\world\masonry\towers\HWall.bmp 640 32
+tile data\images\world\masonry\towers\tower_e.bmp -128 32
+tile data\images\world\land\Grass3x3seamless.bmp 896 -224
+tile data\images\world\masonry\towers\tower_sw.bmp 896 32
+tile data\images\world\masonry\towers\tower_n.bmp 896 -224
+tile data\images\world\land\Grass3x3seamless.bmp 896 -480
+end_map
