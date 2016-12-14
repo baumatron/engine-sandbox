@@ -2,10 +2,8 @@
 #ifndef CEVENTROUTER_H
 #define CEVENTROUTER_H
 
-#include "con_main.h"
 #include "CRouterEvent.h"
 #include "ISubsystem.h"
-#include "CSoundSubsystem.h"
 #include <string>
 //#include <vector>
 using namespace std;
@@ -48,14 +46,7 @@ class CEventRouter
 public:
 	CEventRouter();
 
-	bool RouteEvent(CRouterEvent& event);
-private:
-	ISubsystem* pVideo;
-	ISubsystem* pSound;
-	ISubsystem* pInput;
-	ISubsystem* pConsole;
-	ISubsystem* pNetwork;
-	ISubsystem* pResource;
+	bool RouteEvent(CRouterEvent event);
 };
 
 extern CEventRouter EventRouter;

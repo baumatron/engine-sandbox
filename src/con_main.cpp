@@ -1,14 +1,15 @@
 #include "con_main.h"
 #include "sys_main.h"
-#include "in_main.h"
-#include "in_win.h"
+//#include "in_main.h"
+//#include "in_win.h"
 #include "vid_win.h"
 #include "CVideoSubsystem.h"
 #include "con_display.h"
-#include "bnd_main.h"
+//#include "bnd_main.h"
 #include "m_misc.h"
 #include "CEventRouter.h"
-#include "CToken.h"
+#include "CTokenManager.h"
+#include "CPythonSubsystem.h"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -71,7 +72,7 @@ con_Cout& con_Cout::operator << (unsigned char rhs)
 	message(cstring);
 	return *this;
 }
-con_Cout& con_Cout::operator << (double rhs)
+con_Cout& con_Cout::operator << (float rhs)
 {
 	message(M_ftoa(rhs));
 	return *this;
@@ -112,12 +113,14 @@ con_Cout& con_Cout::operator << (bool rhs)
 void con_Cout::message(string text)
 {
 	cout << text;
+	cout.flush();
 	if(!con_initialized) 
 	{
 		SYS_Message(text);
 		return;
 	}
 	fout_log << text;
+	fout_log.flush();
 	for(unsigned int i = 0; i < text.length(); i++)
 	{
 		if(text[i] == '\n')
@@ -142,7 +145,7 @@ con_Input::con_Input(string text)
 	{
 		if( text[character] == '"') // make anything inside quotes one argument
 		{
-			character++; // move past the double quote
+			character++; // move past the float quote
 			if( character >= text.length() ) // oops, bad input, better not crash because of it
 				return;
 
@@ -155,7 +158,7 @@ con_Input::con_Input(string text)
 
 				character++;
 			}
-	//taken care of by for statement when continues		character++; // move past the end double quote
+	//taken care of by for statement when continues		character++; // move past the end float quote
 
 			numarguments = argument+1;
 			argument++;
@@ -271,7 +274,7 @@ con_Command con_cmd_ ("", con_cmd_ _handler);
 
 void con_cmd_listkeys_handler(con_Input& input)
 {
-	short index = 0;	
+/*	short index = 0;	
 	char* current = in_KeyNames[index].name;
 	ccout << "Non alpha-numeric key names:" << newl;
 	while(current) // try to find a key name that matches
@@ -282,7 +285,7 @@ void con_cmd_listkeys_handler(con_Input& input)
 		index++;
 		current = in_KeyNames[index].name;
 	}
-	ccout << newl;
+	ccout << newl;*/
 }
 con_Command con_cmd_listkeys("listkeys", con_cmd_listkeys_handler);
 
@@ -304,8 +307,8 @@ void con_cmd_vid_res_handler(con_Input& input)
 		if(Video.IsInitialized())
 		{
 			Video.SetResolution(atoi(input.arguments[1].c_str()), atoi(input.arguments[2].c_str()), 32, M_atob(input.arguments[3].c_str()) );
-			if(consoleDown)
-				consoleY = Video.settings.getSh()/2;
+//			if(consoleDown)
+//				consoleY = Video.settings.getSh()/2;
 			ccout << "Video resolution changed." << newl;
 		}
 	}
@@ -315,7 +318,8 @@ con_Command con_cmd_vid_res("vid_res", con_cmd_vid_res_handler);
 
 void con_cmd_console_handler(con_Input& input)
 {
-	if(consoleDown && !consoleMoving)
+	showConsole = !showConsole;
+	/*if(consoleDown && !consoleMoving)
 	{
 		consoleMoving = true;
 	}
@@ -325,7 +329,7 @@ void con_cmd_console_handler(con_Input& input)
 		{
 			consoleMoving = true;
 		}
-	}
+	}*/
 }
 con_Command con_cmd_console("console", con_cmd_console_handler);
 
@@ -572,11 +576,13 @@ void CON_Exec(string command)
 				}
 			}
 		}
-		if((!(wasVariable | wasCommand)) /*&& (currentStatement->commandLine != "")*/) 
+		if((!(wasVariable | wasCommand)) ) 
 		{
-			CRouterEvent event = TokenManager.BuildEventFromString( command );
+			Python.ExecuteString(command);
+
+		/*	CRouterEvent event = TokenManager.BuildEventFromString( command );
 			if( EventRouter.RouteEvent( event ) )
-				ccout << "Unrecognized command or variable: "<< command << newl;
+				ccout << "Unrecognized command or variable: "<< command << newl;*/
 		}
 	}
 }
@@ -740,16 +746,15 @@ void CON_Shutdown()
 	commandList = 0;
 }
 
-//unsigned char CON_InputReceiver(in_Event* event)
 bool CON_InputReceiver(const CInputEvent& event)
 {
 	if(!con_initialized) return false;
 	
 	if(event.inputEventType == IET_STATECHANGE)
 	{
-		if(event.keyAction == IKA_PRESS)
+		if(event.data.stateChangeEvent.keyAction == IKA_PRESS)
 		{
-			switch(event.keyCode)
+			switch(event.data.stateChangeEvent.keyCode)
 			{
 			case '`':
 				CON_Exec("console");
@@ -758,155 +763,130 @@ bool CON_InputReceiver(const CInputEvent& event)
 		}
 	}
 	
-	if(!consoleDown && !consoleMoving)
-		return false;
-	//if(event->eventType == INEV_MOUSEMOVE)
-	//	return false;
-/*	static float keyHoldStart(0);
-	static unsigned char lastKey(0);
-	bool shifted(false);
-
-
-	if(event->eventType == INEV_PRESS) // key was pressed
+	if(COND_ConsoleIsVisible())
 	{
-		lastKey = event->key;
-		keyHoldStart = sys_curTime;
-	}
-	if(event->eventType == INEV_DRAG)
-	{
-		if(lastKey != event->key)
-			return 1;
-		if(sys_curTime - keyHoldStart < .3)
-			return 1;
-	}
-	if(event->eventType == INEV_RELEASE)
-	{
-		keyHoldStart = 0;
-		lastKey = 0;
-		return 1;
-	}
-	if(event->flags & INEVF_SHIFT)
-		shifted = true;*/
-	if(event.inputEventType == IET_CHARACTERTYPED)
-		switch(event.characterCode) // not really unicode for now... ascii!!!
-		{
-			case IKC_RETURN:
-				if(inputLine != "")
-				{
-					if(textBuffer[0] != "")
-						ccout << newl;
-					ccout << ']' << inputLine << newl;
-					CON_Exec(inputLine);
 
-					scrollPrevEntryBuffer();
-					prevEntryBuffer[0] = inputLine;
-
-					inputLine = "";
-					inputCursor = 0;
-				}
-				return true;
-				break;
-			case IKC_BACKSPACE:
-				if( (inputLine.length() > 0))
-				{
-					//inputLine = "hello";
-					//inputLine.erase(0, 2);
-					if(inputCursor < inputLine.length())
-						inputLine.erase(((signed)inputLine.length())-1-inputCursor, 1);
-					if(inputCursor >= inputLine.length())
-						inputCursor = inputLine.length();
-				}
-				return true;
-				break;
-			case IKC_DELETE:
-				{
-					if(inputCursor < inputLine.length()+1 && inputCursor > 0)
+		if(event.inputEventType == IET_CHARACTERTYPED)
+			switch(event.data.characterTypeEvent.characterCode) // not really unicode for now... ascii!!!
+			{
+				case IKC_RETURN:
+					if(inputLine != "")
 					{
-						inputLine.erase(((signed)inputLine.length())-inputCursor, 1);
-						inputCursor--;
-					}
-					if(inputCursor < 0)
+						if(textBuffer[0] != "")
+							ccout << newl;
+						ccout << ']' << inputLine << newl;
+						CON_Exec(inputLine);
+
+						scrollPrevEntryBuffer();
+						prevEntryBuffer[0] = inputLine;
+
+						inputLine = "";
 						inputCursor = 0;
-				}
-				return true;
-				break;
-			case IKC_UP:
-				useEntryBufferPrev();
-				if(inputLine == "")
-					useEntryBufferNext(); // don't scroll if it's empty
-				return true;
-				break;
-			case IKC_DOWN:
-				useEntryBufferNext();
-				if(inputLine == "")
-					useEntryBufferPrev(); // don't scroll if it's empty
-				return true;
-				break;
-			case IKC_LEFT:
-				{
-					if(inputCursor < inputLine.size())
-						inputCursor++;
+					}
 					return true;
-				}
-				break;
-			case IKC_RIGHT:
-				{
-					if(inputCursor > 0)
-						inputCursor--;
-					return true;
-				}
-				break;
-			case IKC_PAGEUP:
-				textBufferDisplayLocation++;
-				if(textBufferDisplayLocation > NUM_TEXT_BUFFER_LINES-2)
-					textBufferDisplayLocation = NUM_TEXT_BUFFER_LINES-2; // 2 because the location 0 is used for the input line(?) and it's one more than the max index
-				return true;
-				break;
-			case IKC_PAGEDOWN:
-				if(textBufferDisplayLocation != 0)
-					textBufferDisplayLocation--;
-				return true;
-				break;
-
-			default:
-				/*if(event->key == INKEY_TAB)
-					if(event->flags & INEVF_ALT)
-						return true;*/
-
-				if(/*IN_GetCharacter(event->key) == '`'*/ event.characterCode == '`')
-				{
-					return false;
 					break;
-				}
-				if(event.characterCode < 128)
-				{
-					string character;
-					character += (char)event.characterCode;
-					inputLine.insert(((signed)inputLine.length())-inputCursor, character);
+				case IKC_BACKSPACE:
+					if( (inputLine.length() > 0))
+					{
+						//inputLine = "hello";
+						//inputLine.erase(0, 2);
+						if(inputCursor < inputLine.length())
+							inputLine.erase(((signed)inputLine.length())-1-inputCursor, 1);
+						if(inputCursor >= inputLine.length())
+							inputCursor = inputLine.length();
+					}
 					return true;
-					/*if(shifted)
+					break;
+				case IKC_DELETE:
 					{
-						//inputLine += IN_GetShiftedCharacter(event->key);
-						string character;
-						character += IN_GetShiftedCharacter(event->key);
-						inputLine.insert(((signed)inputLine.length())-inputCursor, character);
+						if(inputCursor < inputLine.length()+1 && inputCursor > 0)
+						{
+							inputLine.erase(((signed)inputLine.length())-inputCursor, 1);
+							inputCursor--;
+						}
+						if(inputCursor < 0)
+							inputCursor = 0;
+					}
+					return true;
+					break;
+				case IKC_UP:
+					useEntryBufferPrev();
+					if(inputLine == "")
+						useEntryBufferNext(); // don't scroll if it's empty
+					return true;
+					break;
+				case IKC_DOWN:
+					useEntryBufferNext();
+					if(inputLine == "")
+						useEntryBufferPrev(); // don't scroll if it's empty
+					return true;
+					break;
+				case IKC_LEFT:
+					{
+						if(inputCursor < inputLine.size())
+							inputCursor++;
+						return true;
+					}
+					break;
+				case IKC_RIGHT:
+					{
+						if(inputCursor > 0)
+							inputCursor--;
+						return true;
+					}
+					break;
+				case IKC_PAGEUP:
+					textBufferDisplayLocation++;
+					if(textBufferDisplayLocation > NUM_TEXT_BUFFER_LINES-2)
+						textBufferDisplayLocation = NUM_TEXT_BUFFER_LINES-2; // 2 because the location 0 is used for the input line(?) and it's one more than the max index
+					return true;
+					break;
+				case IKC_PAGEDOWN:
+					if(textBufferDisplayLocation != 0)
+						textBufferDisplayLocation--;
+					return true;
+					break;
 
-						return true;
-						break;
-					}	
-					else
+				default:
+					/*if(event->key == INKEY_TAB)
+						if(event->flags & INEVF_ALT)
+							return true;*/
+
+					if(/*IN_GetCharacter(event->key) == '`'*/ event.data.characterTypeEvent.characterCode == '`')
 					{
-					//	inputLine += IN_GetCharacter(event->key);
+						return false;
+						break;
+					}
+					if(event.data.characterTypeEvent.characterCode < 128)
+					{
 						string character;
-						character += IN_GetCharacter(event->key);
+						character += (char)event.data.characterTypeEvent.characterCode;
 						inputLine.insert(((signed)inputLine.length())-inputCursor, character);
 						return true;
-						break;
-					}*/
-				} // if event->key < 128
-				break;
-		} // switch event->key
-//	}	
+						/*if(shifted)
+						{
+							//inputLine += IN_GetShiftedCharacter(event->key);
+							string character;
+							character += IN_GetShiftedCharacter(event->key);
+							inputLine.insert(((signed)inputLine.length())-inputCursor, character);
+
+							return true;
+							break;
+						}	
+						else
+						{
+						//	inputLine += IN_GetCharacter(event->key);
+							string character;
+							character += IN_GetCharacter(event->key);
+							inputLine.insert(((signed)inputLine.length())-inputCursor, character);
+							return true;
+							break;
+						}*/
+					} // if event->key < 128
+					break;
+			} // switch event->key
+	//	}	
+	}
 	return false; 
 }
 

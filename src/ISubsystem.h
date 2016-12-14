@@ -1,10 +1,12 @@
 
 
-#include "CRouterEvent.h"
-#include "CEventRouter.h"
 
 #ifndef ISUBSYSTEM_H
 #define ISUBSYSTEM_H
+
+#include "CRouterEvent.h"
+#include "CEventRouter.h"
+#include "CInputEvent.h"
 
 class CRouterReturnCode;
 // an interface for all subsystems
@@ -20,6 +22,7 @@ public:
 	virtual bool Shutdown() = 0;
 
 	virtual CRouterReturnCode EventReceiver(CRouterEvent& event) = 0;
+	virtual bool InputReceiver(const CInputEvent& event) = 0;
 };
 
 class IThinkSubsystem: public ISubsystem

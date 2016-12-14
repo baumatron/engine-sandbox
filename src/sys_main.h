@@ -2,7 +2,7 @@
 #define SYS_MAIN_H
 
 //#define DEBUG_RAY
-#include "in_event.h"
+//#include "in_event.h"
 
 #include <string>
 #include <vector>
@@ -24,7 +24,7 @@ void SYS_Shutdown();
 
 void SYS_Message(string text);
 
-unsigned char SYS_InputReceiver(in_Event * event);
+//unsigned char SYS_InputReceiver(in_Event * event);
 
 /*class EngineSettings
 {

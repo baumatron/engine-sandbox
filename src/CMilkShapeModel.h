@@ -14,28 +14,47 @@
 //
 //
 
-#include "IModelLoader.h"
+//#include "IModelLoader.h"
+#include "CSmartPointer.h"
+#include "CModel.h"
 
-class CMilkShapeModelLoader: public IModelLoader
+class CMilkShapeModelLoader
 {
 public:
 	CMilkShapeModelLoader();
 	~CMilkShapeModelLoader();
 
-	virtual bool ReadModelFromFile(string filename); // should open the model with filename specified and process it and then close the file
-	virtual void LoadModel(CModel& model); // copy the model to the CModel object
+	static CMilkShapeModelLoader* GetInstance();
+	//virtual bool ReadModelFromFile(string filename); // should open the model with filename specified and process it and then close the file
+	//virtual void LoadModel(CModel& model); // copy the model to the CModel object
 
-
+	CSmartPointer<CCoreModel> LoadModel(string filename);
+//	bool LoadModel(CModel& model, string filename);
 private:
+	bool ReadModelFromFile(string filename); // should open the model with filename specified and process it and then close the file
+	void LoadModel(CSmartPointer<CCoreModel>& model); // copy the model to the CModel object
+
 	bool ReadDataFromFile(string filename); // read the data into m_pFileData
 	void FreeMemory(); // free memory and set to NULL
 
 	char* m_pFileData;
 	unsigned long m_fileSize;
 
-	CModel* m_pModel; 
+	CSmartPointer<CCoreModel> m_pModel; 
+	static CMilkShapeModelLoader* instance;
 };
+/*
+	static CXMLParser* GetInstance();
 
+	string GetTagData(ifstream& file, string tag, int number = 0);
+	string GetTagData(string source, string tag, int number = 0);
+private:
+	CXMLParser();
+	~CXMLParser();
+
+	static CXMLParser* instance;*/
+
+//extern CMilkShapeModelLoader MilkshapeModelLoader;
 
 
 //

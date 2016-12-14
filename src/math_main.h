@@ -101,7 +101,7 @@ public:
 		bottomy(0),
 		rightx(0),
 		topy(0){}
-	CRectangle(float _leftx, float _bottomy, float _rightx, float _topy):
+	CRectangle(float _leftx, float _rightx, float _bottomy, float _topy):
 		leftx(_leftx),
 		bottomy(_bottomy),
 		rightx(_rightx),
@@ -123,7 +123,23 @@ public:
 	{
 		return v3d(rightx, bottomy);
 	}	
+	float getHeight()
+	{
+		return topy-bottomy;
+	}
+	float getWidth()
+	{
+		return rightx-leftx;
+	}
 	
+	CRectangle operator + (const v3d vector)
+	{
+		return CRectangle(leftx+vector.x, rightx+vector.x, bottomy+vector.y, topy+vector.y);
+	}
+	CRectangle operator + (const CRectangle vector)
+	{
+		return CRectangle(leftx+vector.leftx, rightx+vector.rightx, bottomy+vector.bottomy, topy+vector.topy);
+	}
 	float leftx, bottomy, rightx, topy;
 private:
 };
@@ -133,7 +149,7 @@ class quaternion;
 class matrix4x4
 {
 public:
-	float matrix[4][4];
+	float matrix[16];
 
 	matrix4x4();
 	matrix4x4(	const float& el00, const float& el01, const float& el02, const float& el03, 
@@ -178,7 +194,10 @@ public:
 	matrix4x4 setRot(v3d angle);
 	matrix4x4 setTranslation(v3d translation);
 
-
+	float getDeterminant();
+	matrix4x4 getTranspose();
+	matrix4x4 getInverse();
+	matrix4x4 getTransform();
 	v3d getTranslation();
 	float getXRot();
 	float getYRot();
@@ -186,6 +205,9 @@ public:
 	v3d getRot();
 
 	void zero();
+private:
+	float det2x2(float* matrix2x2v);
+	float det3x3(float* matrix3x3v);
 };
 
 matrix4x4 RotationMatrix(v3d angle);
@@ -208,14 +230,14 @@ public:
 	{
 	}
 
-	float length() const
+	float length() const // also known as norm
 	{
 		return sqrt( x*x + y*y + z*z + w*w );
 	}
 
 	void normalize()
 	{
-		float len = abs((long)length());
+		float len = fabs(length());
 		if(len == 0.0f)
 			return;
 		x /= len;
@@ -232,7 +254,7 @@ public:
 	{
 		return quaternion(-x, -y, -z, w);
 	}
-	v3d getVector()
+	v3d getVector() const
 	{
 		return v3d(x, y, z);
 	}
@@ -279,7 +301,7 @@ public:
 		int nxt[3] = {1, 2, 0};
 
 
-		tr = rhs.matrix[0][0] + rhs.matrix[1][1] + rhs.matrix[2][2];
+		tr = rhs.matrix[0] + rhs.matrix[5] + rhs.matrix[10];
 
 
 		// check the diagonal
@@ -287,28 +309,28 @@ public:
 			s = sqrt (tr + 1.0f);
 			w = s / 2.0f;
 			s = 0.5f / s;
-			x = (rhs.matrix[1][2] - rhs.matrix[2][1]) * s;
-			y = (rhs.matrix[2][0] - rhs.matrix[0][2]) * s;
-			z = (rhs.matrix[0][1] - rhs.matrix[1][0]) * s;
+			x = (rhs.matrix[9] - rhs.matrix[6]) * s;
+			y = (rhs.matrix[2] - rhs.matrix[8]) * s;
+			z = (rhs.matrix[4] - rhs.matrix[1]) * s;
 		} else {		
 			// diagonal is negative
     			i = 0;
-				if (rhs.matrix[1][1] > rhs.matrix[0][0]) i = 1;
-				if (rhs.matrix[2][2] > rhs.matrix[i][i]) i = 2;
+				if (rhs.matrix[0] > rhs.matrix[5]) i = 1;
+				if (rhs.matrix[10] > rhs.matrix[i+i*4]) i = 2;
 					j = nxt[i];
 					k = nxt[j];
 
 
-					s = sqrt ((rhs.matrix[i][i] - (rhs.matrix[j][j] + rhs.matrix[k][k])) + 1.0f);
+					s = sqrt ((rhs.matrix[i+i*4] - (rhs.matrix[j+j*4] + rhs.matrix[k+k*4])) + 1.0f);
 		      
 				q[i] = s * 0.5f;
 		            
 					if (s != 0.0) s = 0.5f / s;
 
 
-				q[3] = (rhs.matrix[j][k] - rhs.matrix[k][j]) * s;
-					q[j] = (rhs.matrix[i][j] + rhs.matrix[j][i]) * s;
-					q[k] = (rhs.matrix[i][k] + rhs.matrix[k][i]) * s;
+				q[3] = (rhs.matrix[j+k*4] - rhs.matrix[k+j*4]) * s;
+					q[j] = (rhs.matrix[i+j*4] + rhs.matrix[j+i*4]) * s;
+					q[k] = (rhs.matrix[i+k*4] + rhs.matrix[k+i*4]) * s;
 
 
 			x = q[0];
@@ -317,19 +339,64 @@ public:
 			w = q[3];
 		}
 		}
+		return *this;
 	}
 
 	static quaternion rotation(v3d axis, float theta)
 	{
 		quaternion result;
+		float temp, dist;
+
+		// normalize
+		temp = axis.x*axis.x + axis.y*axis.y + axis.z*axis.z;
+
+		dist = (float)(1.0 / sqrt(temp));
+
+		axis.x *= dist;
+		axis.y *= dist;
+		axis.z *= dist;
+
+		result.x = axis.x;
+		result.y = axis.y;
+		result.z = axis.z;
+
+		result.w = (float)cos((theta * pi/180) / 2.0f);
+		/*
 		result.x = axis.x * sin(theta/2);
 		result.y = axis.y * sin(theta/2);
 		result.z = axis.z * sin(theta/2);
-		result.w = cos(theta/2);
+		result.w = cos(theta/2);*/
+/*
+		float cr, cp, cy, sr, sp, sy, cpcy, spsy;
+
+
+		// calculate trig identities
+		cr = cos(zrot/2);
+
+		cp = cos(xrot/2);
+		cy = cos(yrot/2);
+
+
+		sr = sin(zrot/2);
+		sp = sin(xrot/2);
+		sy = sin(yrot/2);
+		
+		cpcy = cp * cy;
+		spsy = sp * sy;
+
+
+		result.w = cr * cpcy + sr * spsy;
+		result.x = sr * cpcy - cr * spsy;
+		result.y = cr * sp * cy + sr * cp * sy;
+		result.z = cr * cp * sy - sr * sp * cy;
+*/
+
+
 		return result;
 	}
 };
 
+con_Cout& operator<<(con_Cout& out, const quaternion& rhs);
 
 
 

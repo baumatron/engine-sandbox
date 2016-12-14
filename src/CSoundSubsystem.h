@@ -1,8 +1,11 @@
 #ifndef S_MAIN_H
 #define S_MAIN_H
 
+
 #include "ISubsystem.h"
 #include "CEventRouter.h"
+#include <boost/python.hpp>
+using namespace boost::python;
 #include <string>
 using namespace std;
 
@@ -19,6 +22,7 @@ public:
 	virtual bool Shutdown();
 
 	virtual CRouterReturnCode EventReceiver(CRouterEvent& event);
+	virtual bool InputReceiver(const CInputEvent& event);
 
 ////////////////////////
 	short LoadSound(string filename, bool stream);
@@ -26,8 +30,11 @@ public:
 	void UnloadSound(string filename);
 	void StopSound(short id);
 	void StopSound(string filename);
-	void PlaySound(short id, float volume = 1.0f);
-	void PlaySound(string filename, float volume = 1.0f, bool stream = false);
+	void PlaySoundById(short id, float volume = 1.0f);
+	void PlaySoundByName(string filename, float volume = 1.0f, bool stream = false);
+	float GetPlaybackProgress(string filename);
+	float GetPlaybackProgress(short id);
+	void Seek(float percent, string filename);
 
 private:
 	S_SystemData* p_systemData; // for all the shit that requires funky headers and shit (audiere)

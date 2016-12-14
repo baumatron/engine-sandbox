@@ -1,4 +1,7 @@
+#include "CVideoSubsystem.h"
+
 #include "CInputSubsystem.h"
+#include "math_main.h"
 
 #ifdef WIN32
 #include <SDL.h>
@@ -12,6 +15,9 @@ using namespace std;
 	
 CInputSubsystem Input;
 
+v3d mousePosition;
+v3d oldMousePosition;
+
 CInputSubsystem::CInputSubsystem():
 initialized(false)
 {
@@ -21,6 +27,13 @@ initialized(false)
 		keyStates[i] = IKS_UP;
 		shiftedCharacters[i] = i; // initialize these to unshifted values, followed below by the keys that actually shift
 	}
+	for( int i = 0; i < IMC_LAST; i++ )
+	{
+		oldMouseButtonStates[i] = IKS_UP;
+		mouseButtonStates[i] = IKS_UP;
+	}
+	mousePosition = v3d(0,0);
+	oldMousePosition = v3d(0,0);
 	
 	// set up the rest of the table
 	for ( int i = 0; i < 26; i++ )
@@ -50,11 +63,14 @@ initialized(false)
                        
                        
 CInputSubsystem::~CInputSubsystem()
-{                      
+{          
+	if(initialized)
+		Shutdown();
 }                      
                        
 bool CInputSubsystem::PreInitialize() // PreInitialize is called before Initialize, only links to other subsystems should be made here
-{                      
+{         
+	return true;
 }                      
                        
 bool CInputSubsystem::Initialize()
@@ -78,14 +94,20 @@ void CInputSubsystem::Think()
 	{                     
 		oldKeyStates[i] = keyStates[i];
 	}                     
-	                      
+	for(int i = 0; i < IMC_LAST; i++)
+	{                     
+		oldMouseButtonStates[i] = mouseButtonStates[i];
+	}  	                      
+	oldMousePosition = mousePosition;
+
 	// now, check for input events from sdl. 
 	// use these events to update keyStates
 	SDL_Event sdlevent;   
                        
-	while(SDL_PollEvent(&sdlevent)) 
+	if(SDL_PollEvent(&sdlevent)) 
 	{                     
 		CInputEvent inputEvent;
+		unsigned short mods = 0;
 		bool shiftedCharacter(false);
 		switch( sdlevent.type ) 
 		{                    
@@ -100,6 +122,7 @@ void CInputSubsystem::Think()
 			case SDL_KEYDOWN:   
 				{                  
 					keyStates[sdlevent.key.keysym.sym] = IKS_DOWN;
+					mods = (unsigned short)sdlevent.key.keysym.mod;
 					if( sdlevent.key.keysym.mod & (KMOD_LSHIFT | KMOD_RSHIFT) )
 						shiftedCharacter = true;
 				}                  
@@ -107,11 +130,28 @@ void CInputSubsystem::Think()
 			case SDL_KEYUP:     
 				{                  
 					keyStates[sdlevent.key.keysym.sym] = IKS_UP;
+					mods = (unsigned short)sdlevent.key.keysym.mod;
 					if( sdlevent.key.keysym.mod & (KMOD_LSHIFT | KMOD_RSHIFT) )
 						shiftedCharacter = true;
 				}                  
-				break;             
-			default:            
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+				{
+					mouseButtonStates[sdlevent.button.button] = IKS_DOWN;
+				}
+				break;
+			case SDL_MOUSEBUTTONUP:
+				{
+					mouseButtonStates[sdlevent.button.button] = IKS_UP;
+				}
+				break;
+			case SDL_MOUSEMOTION:
+				{
+					mousePosition.x = sdlevent.motion.x;
+					mousePosition.y = Video.settings.getSh()-sdlevent.motion.y;
+				}
+				break;
+			default:          
 				break;             
 		}   
 		
@@ -134,37 +174,90 @@ void CInputSubsystem::Think()
 			{
 				// key press action occurred
 				inputEvent.inputEventType = IET_STATECHANGE;
-				inputEvent.keyCode = (InputKeyCodes)i;
-				inputEvent.keyAction = IKA_PRESS;
+				inputEvent.data.stateChangeEvent.keyCode = (InputKeyCodes)i;
+				inputEvent.data.stateChangeEvent.keyAction = IKA_PRESS;
+				inputEvent.data.stateChangeEvent.modifiers = mods;
 				DispatchInputEvent(inputEvent);
 				
 				inputEvent.inputEventType = IET_CHARACTERTYPED;
-				inputEvent.characterCode = characterCode;
+				inputEvent.data.characterTypeEvent.characterCode = characterCode;
+				inputEvent.data.characterTypeEvent.modifiers = mods;
 				DispatchInputEvent(inputEvent);
 			}
 			else if( (oldKeyStates[i] == IKS_DOWN) && (keyStates[i] == IKS_UP) )
 			{
-				// key press action occurred
+				// key release action occurred
 				inputEvent.inputEventType = IET_STATECHANGE;
-				inputEvent.keyCode = (InputKeyCodes)i;
-				inputEvent.keyAction = IKA_RELEASE;
+				inputEvent.data.stateChangeEvent.keyCode = (InputKeyCodes)i;
+				inputEvent.data.stateChangeEvent.keyAction = IKA_RELEASE;
+				inputEvent.data.stateChangeEvent.modifiers = mods;
 				
 				DispatchInputEvent(inputEvent);
 			}
 			else if( (oldKeyStates[i] == IKS_DOWN) && (keyStates[i] == IKS_DOWN) )
 			{
-				// key press action occurred
+				// key hold action occurred
 				inputEvent.inputEventType = IET_STATECHANGE;
-				inputEvent.keyCode = (InputKeyCodes)i;
-				inputEvent.keyAction = IKA_HOLD;
+				inputEvent.data.stateChangeEvent.keyCode = (InputKeyCodes)i;
+				inputEvent.data.stateChangeEvent.keyAction = IKA_HOLD;
+				inputEvent.data.stateChangeEvent.modifiers = mods;
 				
 				DispatchInputEvent(inputEvent);
 			}
+		}  
+
+		// look at the mouse now
+		for(int i = 0; i < IMC_LAST; i++)
+		{                     
+			CInputEvent inputEvent;
 			
-			
-		}
+			// check for state changes
+			// key held is considered a state change, because it is an interesting event
+			if( (oldMouseButtonStates[i] == IKS_UP) && (mouseButtonStates[i] == IKS_DOWN) )
+			{
+				// button press action occurred
+				inputEvent.inputEventType = IET_MOUSEBUTTON;
+				inputEvent.data.mouseButtonEvent.mouseButtonCode = (InputMouseButtonCodes)i;
+				inputEvent.data.mouseButtonEvent.mouseButtonAction = IKA_PRESS;
+				inputEvent.data.mouseButtonEvent.mousePositionX = mousePosition.x;
+				inputEvent.data.mouseButtonEvent.mousePositionY = mousePosition.y;
+	
+				DispatchInputEvent(inputEvent);
+			}
+			else if( (oldMouseButtonStates[i] == IKS_DOWN) && (mouseButtonStates[i] == IKS_UP) )
+			{
+				// button release action occurred
+				inputEvent.inputEventType = IET_MOUSEBUTTON;
+				inputEvent.data.mouseButtonEvent.mouseButtonCode = (InputMouseButtonCodes)i;
+				inputEvent.data.mouseButtonEvent.mouseButtonAction = IKA_RELEASE;
+				inputEvent.data.mouseButtonEvent.mousePositionX = mousePosition.x;
+				inputEvent.data.mouseButtonEvent.mousePositionY = mousePosition.y;
 		
-		                 
+				DispatchInputEvent(inputEvent);
+			}
+			else if( (oldMouseButtonStates[i] == IKS_DOWN) && (mouseButtonStates[i] == IKS_DOWN) )
+			{
+				// button hold action occurred
+				inputEvent.inputEventType = IET_MOUSEBUTTON;
+				inputEvent.data.mouseButtonEvent.mouseButtonCode = (InputMouseButtonCodes)i;
+				inputEvent.data.mouseButtonEvent.mouseButtonAction = IKA_HOLD;
+				inputEvent.data.mouseButtonEvent.mousePositionX = mousePosition.x;
+				inputEvent.data.mouseButtonEvent.mousePositionY = mousePosition.y;
+		
+				DispatchInputEvent(inputEvent);
+			}
+		}       
+
+		if( oldMousePosition != mousePosition )
+		{
+				// mouse move action occurred
+				inputEvent.inputEventType = IET_MOUSEMOVE;
+				inputEvent.data.mouseMoveEvent.mouseDeltaX = mousePosition.x - oldMousePosition.x;
+				inputEvent.data.mouseMoveEvent.mouseDeltaY = mousePosition.y - oldMousePosition.y;
+				inputEvent.data.mouseMoveEvent.mouseX = mousePosition.x;
+				inputEvent.data.mouseMoveEvent.mouseY = mousePosition.y;
+				DispatchInputEvent(inputEvent);
+		}
 	}                     
 	                      
 	
@@ -178,9 +271,19 @@ CRouterReturnCode CInputSubsystem::EventReceiver(CRouterEvent& event)
 	return CRouterReturnCode(false, true);
 }
 
+bool CInputSubsystem::InputReceiver(const CInputEvent& event)
+{
+	return false;
+}
+
+
 void CInputSubsystem::AddInputReceiver(bool (*receiver) (const CInputEvent& event))
 {
-	inputReceivers.push_back(receiver);
+	legacyInputReceivers.push_back(receiver);
+}
+void CInputSubsystem::AddInputReceiver(ISubsystem* subsystem)
+{
+	inputReceivers.push_back(subsystem);
 }
 
 unsigned short CInputSubsystem::GetShiftedCharacterCode(unsigned short unshiftedCharacterCode)
@@ -199,7 +302,12 @@ void CInputSubsystem::DispatchInputEvent(const CInputEvent& event)
 	// go through each receiver, starting with the last one that was added
 	for(int i = inputReceivers.size()-1; i >=0; i--)
 	{
-		if(inputReceivers[i](event))
+		if(inputReceivers[i]->InputReceiver(event))
+			return;
+	}
+	for(int i = legacyInputReceivers.size()-1; i >=0; i--)
+	{
+		if(legacyInputReceivers[i](event))
 			return;
 	}
 }

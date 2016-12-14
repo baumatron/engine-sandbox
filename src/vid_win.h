@@ -2,7 +2,7 @@
 #define VID_WIN_H
 
 #include "CVideoSubsystem.h"
-#include "CModel.h"
+#include "CCalModel.h"
 #include <string>
 
 
@@ -19,13 +19,11 @@ void VIDW_UpdateLights();
 void StartGLScene();
 void VIDW_SetResolution(short width, short height, short bpp, bool fullscreen);
 
-void VIDW_DrawLine(v3d start, v3d end, unsigned long color, bool usecam = true);
-void VIDW_DrawLineScaled(v3d start, v3d end, unsigned long color, bool usecam = true);
+void VIDW_DrawLine(v3d start, v3d end, rgba8888pixel color, bool usecam = true);
+void VIDW_DrawLineScaled(v3d start, v3d end, rgba8888pixel color, bool usecam = true);
 
 void VIDW_DrawTriangle3d(vid_Point p1, vid_Point p2, vid_Point p3, v3d normal, short textureId);
 void VIDW_DrawTriangle(float x1,float y1,float x2,float y2,float x3,float y3,unsigned long color);
-
-void VIDW_DrawModel(const CModel& model);
 
 void VIDW_BlitBitmap(unsigned long* data, v3d position, v3d size, float rotateangle = 0, v3d pivot = v3d(0,0,0), bool usecam = false, bool stencil = false);
 void VIDW_BlitBitmap(short id           , v3d position, v3d size, float rotateangle = 0, v3d pivot = v3d(0,0,0), bool usecam = false,  bool stencil = false);

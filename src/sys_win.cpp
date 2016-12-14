@@ -34,7 +34,7 @@ clock_t startTime;
 
 static void SetupTimeFloat()
 {
-	startTime = 0;//clock();
+	startTime = SDL_GetTicks();
 /*	if (!QueryPerformanceFrequency((LARGE_INTEGER *)&sys_ticks_per_sec))
 	{ // no performance counter available
 		sys_MMTimerStart = timeGetTime();
@@ -52,7 +52,7 @@ static void SetupTimeFloat()
 // time passed in program in seconds
 float SYSW_TimeFloat()
 {
-	return (float)(clock() - startTime)/CLOCKS_PER_SEC;
+	return (float)(SDL_GetTicks() - startTime)/1000;
 	//currentTime
 	//return 1.0/75.0;
 	/*static int time;
@@ -80,8 +80,6 @@ void SYSW_ShowMainWindow(); // displays the main window*/
 // Application entry point
 int main(int argc, char *argv[])
 {
-	SDL_Surface *screen;
-	SDL_Surface *picture;
 	SDL_Event event;
 	SDL_Rect pictureLocation;
 	int leftPressed, rightPressed, upPressed, downPressed;

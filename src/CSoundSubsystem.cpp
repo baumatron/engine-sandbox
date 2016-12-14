@@ -3,7 +3,7 @@
 #include "CSoundSubsystem.h"
 #include "con_main.h"
 #include "CEventRouter.h"
-#include "CToken.h"
+#include "CTokenManager.h"
 #include <vector>
 using namespace std;
 using namespace audiere;
@@ -105,24 +105,6 @@ CRouterReturnCode CSoundSubsystem::EventReceiver(CRouterEvent& event)
 {
 	unsigned int eventNumber = event.m_data[0];
 
-	/*if(eventNumber == TokenManager.GetSingleTokenByLabel("play", TokenManager.GetSingleTokenByLabel("sound").id).id)
-	{
-		event.Shift(1);
-		PlaySound(event.data[0]);
-		return CRouterReturnCode(false,false);
-	}*/
-
-//preinitialize = SoundTokensStart, initialize, shutdown, play, loadsound, unloadsound
-
-/*	short LoadSound(string filename, bool stream);
-	void UnloadSound(short id);
-	void UnloadSound(string filename);
-	void StopSound(short id);
-	void StopSound(string filename);
-	void PlaySound(short id, float volume = 1.0f);
-	void PlaySound(string filename, float volume = 1.0f, bool stream = false);
-*/
-
 	switch((CTokenManager::SoundTokens)event.GetLong())
 	{
 	case CTokenManager::sound_preinitialize:
@@ -152,7 +134,7 @@ CRouterReturnCode CSoundSubsystem::EventReceiver(CRouterEvent& event)
 				//event.m_arguments.m_list.pop();
 				if(event.m_arguments.MatchesFormat(t_string, t_double))
 				{
-					double volume(1.0);
+					float volume(1.0);
 					event.m_arguments.m_argList[1].GetValue(volume);
 					//event.m_arguments.m_list.front().GetValue(volume);
 					//event.m_arguments.m_list.pop();
@@ -162,16 +144,16 @@ CRouterReturnCode CSoundSubsystem::EventReceiver(CRouterEvent& event)
 						event.m_arguments.m_argList[2].GetValue(stream);
 						//event.m_arguments.m_list.front().GetValue(stream);
 						//event.m_arguments.m_list.pop();
-						PlaySound(filename, (float)volume, stream);
+						PlaySoundByName(filename, (float)volume, stream);
 					}
 					else
 					{
-						PlaySound(filename, (float)volume);
+						PlaySoundByName(filename, (float)volume);
 					}
 				}
 				else
 				{
-					PlaySound(filename);
+					PlaySoundByName(filename);
 				}
 			}
 			else if(event.m_arguments.MatchesFormat(t_long))
@@ -182,15 +164,15 @@ CRouterReturnCode CSoundSubsystem::EventReceiver(CRouterEvent& event)
 				//event.m_arguments.m_list.pop();
 				if(event.m_arguments.MatchesFormat(t_long, t_double))
 				{
-					double volume(1.0);
+					float volume(1.0);
 					event.m_arguments.m_argList[1].GetValue(volume);
 					//event.m_arguments.m_list.front().GetValue(volume);
 					//event.m_arguments.m_list.pop();
-					PlaySound(soundid, volume);
+					PlaySoundById(soundid, volume);
 				}
 				else
 				{
-					PlaySound(soundid);
+					PlaySoundById(soundid);
 				}
 			}
 			else
@@ -285,6 +267,11 @@ CRouterReturnCode CSoundSubsystem::EventReceiver(CRouterEvent& event)
 	return CRouterReturnCode(false,true);
 }
 
+bool CSoundSubsystem::InputReceiver(const CInputEvent& event)
+{
+	return false;
+}
+
 short CSoundSubsystem::LoadSound(string filename, bool stream)
 {
 	if(!initialized)
@@ -356,7 +343,10 @@ void CSoundSubsystem::StopSound(short id)
 	{
 		if(it->id == id)
 		{
-			it->soundEffect->stop();
+			if(it->soundEffect)
+				it->soundEffect->stop();
+			if(it->stream)
+				it->stream->stop();
 			break;
 		}
 	}
@@ -371,13 +361,16 @@ void CSoundSubsystem::StopSound(string filename)
 	{
 		if(it->file == filename)
 		{
-			it->soundEffect->stop();
+			if(it->soundEffect)
+				it->soundEffect->stop();
+			if(it->stream)
+				it->stream->stop();
 			break;
 		}
 	}
 }
 
-void CSoundSubsystem::PlaySound(short id, float volume)
+void CSoundSubsystem::PlaySoundById(short id, float volume)
 {	
 	if(!initialized)
 		return;
@@ -402,7 +395,7 @@ void CSoundSubsystem::PlaySound(short id, float volume)
 	}
 }
 
-void CSoundSubsystem::PlaySound(string filename, float volume, bool stream)
+void CSoundSubsystem::PlaySoundByName(string filename, float volume, bool stream)
 {
 	if(!initialized)
 		return;
@@ -423,5 +416,62 @@ void CSoundSubsystem::PlaySound(string filename, float volume, bool stream)
 	}
 
 		// play the sound
-	PlaySound(id, volume);
+	PlaySoundById(id, volume);
 }
+
+float CSoundSubsystem::GetPlaybackProgress(string filename)
+{
+	float result(0);
+	for(vector<sound_t>::iterator it = p_systemData->sounds.begin(); it != p_systemData->sounds.end(); it++)
+	{
+		if(it->file == filename)
+		{
+			if(it->soundEffect)
+			{
+				result = 1.0f;
+			}
+			if(it->stream)
+			{
+				if(it->stream->isSeekable())
+					result = (float)it->stream->getPosition()/(float)it->stream->getLength();
+			}
+		}
+	}
+	return result;
+}
+float CSoundSubsystem::GetPlaybackProgress(short id)
+{
+	float result(0);
+	for(vector<sound_t>::iterator it = p_systemData->sounds.begin(); it != p_systemData->sounds.end(); it++)
+	{
+		if(it->id == id)
+		{
+			if(it->soundEffect)
+			{
+				result = 1.0f;
+			}
+			if(it->stream)
+			{
+				result = (float)it->stream->getPosition()/(float)it->stream->getLength();
+			}
+		}
+	}
+	return result;
+}
+void CSoundSubsystem::Seek(float percent, string filename)
+{
+	for(vector<sound_t>::iterator it = p_systemData->sounds.begin(); it != p_systemData->sounds.end(); it++)
+	{
+		if(it->file == filename)
+		{
+			if(it->stream)
+			{
+				if(it->stream->isSeekable())
+				{
+					it->stream->setPosition(int(((float)it->stream->getLength())*percent));
+				}
+			}
+		}
+	}
+}
+

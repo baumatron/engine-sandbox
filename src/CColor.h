@@ -70,6 +70,11 @@ struct bgr888pixel
 
 union rgba8888pixel
 {
+	rgba8888pixel(){}
+//	rgba8888pixel(const int & rhs):pixel(rhs){}
+	rgba8888pixel(const unsigned int & rhs):pixel(rhs){}
+	~rgba8888pixel(){}
+	
 	unsigned long pixel;
 	struct 
 	{
@@ -96,6 +101,7 @@ class CColor
 {
 public:
 	CColor():r(1.0f), g(1.0f), b(1.0f), a(1.0f) {}
+	CColor(int r, int g, int b, int a = 255){setColors((unsigned char)r, (unsigned char)g, (unsigned char)b, (unsigned char)a);}
 	CColor(unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {setColors(r, g, b, a);}
 	CColor(float r, float g, float b, float a = 1.0f) {setColors(r, g, b, a);}
 	~CColor() {}
@@ -108,6 +114,15 @@ public:
 	unsigned char getGChar() const {return (unsigned char)(255.0f * g);} // returns an unsigned char from 0 to 255
 	unsigned char getBChar() const {return (unsigned char)(255.0f * b);}
 	unsigned char getAChar() const {return (unsigned char)(255.0f * b);}
+	rgba8888pixel getPixel() const
+	{
+		rgba8888pixel result;
+		result.components.r = getRChar();
+		result.components.g = getGChar();
+		result.components.b = getBChar();
+		result.components.a = getAChar();
+		return result;
+	}
 
 	void setColors(const unsigned char& _r, const unsigned char _g, const unsigned char _b, const unsigned char _a = 255) {setR(_r); setG(_g); setB(_b); setA(_a); }
 	void setColors(const float& _r, const float& _g, const float& _b, const float& _a = 1.0f) {setR(_r); setG(_g); setB(_b); setA(_a); }
@@ -119,6 +134,33 @@ public:
 	void setG(const float& _g) {g = _g;}
 	void setB(const float& _b) {b = _b;}
 	void setA(const float& _a) {a = _a;}
+	
+	CColor operator-(const CColor& rhs)
+	{
+		CColor result(r-rhs.r, g-rhs.g, b-rhs.b, a-rhs.a);
+		if(result.r < 0)
+			result.r = 0;
+		if(result.g < 0)
+			result.g = 0;
+		if(result.b < 0)
+			result.b = 0;
+		if(result.a < 0)
+			result.a = 0;
+		return result;
+	}
+	CColor operator+(const CColor& rhs)
+	{
+		CColor result(r+rhs.r, g+rhs.g, b+rhs.b, a+rhs.a);
+		if(result.r > 1)
+			result.r = 1;
+		if(result.g > 1)
+			result.g = 1;
+		if(result.b > 1)
+			result.b = 1;
+		if(result.a > 1)
+			result.a = 1;
+		return result;
+	}
 private:
 	float r, g, b, a;
 };

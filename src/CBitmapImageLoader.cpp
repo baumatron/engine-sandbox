@@ -9,6 +9,7 @@ using namespace std;
 CBitmapImageLoader BitmapImageLoader;
 
 #pragma pack(2)
+#ifndef WIN32
 typedef struct tagBITMAPFILEHEADER {
         unsigned short    bfType;
         unsigned long   bfSize;
@@ -37,7 +38,7 @@ typedef struct tagPALETTEENTRY {
     unsigned char        peBlue;
     unsigned char        peFlags;
 } PALETTEENTRY/*, *PPALETTEENTRY, FAR *LPPALETTEENTRY*/;
-
+#endif
 typedef struct BITMAP_FILE_TAG
 {
 	BITMAPFILEHEADER bitmapfileheader;  // this contains the bitmapfile header
@@ -131,7 +132,7 @@ bool CBitmapImageLoader::ReadFromFile(CImage& image, const string filename)
 		// allocate memory for image
 		if(image.buffer)
 			delete [] image.buffer;
-		image.buffer = new rgba8888pixel [size/(bpp/8)];
+		image.buffer = new rgba8888pixel [width*height];
 		
 		// read in the image
 		file.read(temp, size);
@@ -141,9 +142,9 @@ bool CBitmapImageLoader::ReadFromFile(CImage& image, const string filename)
 	{
 		//convert from 24 to 32 bit
 		bgr888pixel* bitmapImage = (bgr888pixel*)temp;
-		for(int x = 0; x < height; x++)
+		for(int x = 0; x < width; x++)
 		{
-			for(int y = 0; y < width; y++)
+			for(int y = 0; y < height; y++)
 			{
 				bgr888pixel pixel = bitmapImage[x+y*width];
 				image.buffer[x+y*width].components.r = pixel.r;
@@ -160,9 +161,9 @@ bool CBitmapImageLoader::ReadFromFile(CImage& image, const string filename)
 	else if(bpp == 32)
 	{
 		bgra8888pixel* bitmapImage = (bgra8888pixel*)temp;
-		for(int x = 0; x < height; x++)
+		for(int x = 0; x < width; x++)
 		{
-			for(int y = 0; y < width; y++)
+			for(int y = 0; y < height; y++)
 			{
 				bgra8888pixel pixel = bitmapImage[x+y*width];
 				image.buffer[x+y*width].components.r = pixel.components.r;

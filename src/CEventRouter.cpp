@@ -1,20 +1,18 @@
 #include "CEventRouter.h"
-#include "CToken.h"
+#include "CTokenManager.h"
+#include "CSoundSubsystem.h"
+#include "CVideoSubsystem.h"
+#include "CGuiSubsystem.h"
+#include "CHSISubsystem.h"
+
 CEventRouter EventRouter;
 
-CEventRouter::CEventRouter():
-		pVideo(0),
-		pSound(0),
-		pInput(0),
-		pConsole(0),
-		pNetwork(0),
-		pResource(0)
+CEventRouter::CEventRouter()
 {
-	pSound = &Sound;
 }
 
 
-bool CEventRouter::RouteEvent(CRouterEvent& event)
+bool CEventRouter::RouteEvent(CRouterEvent event)
 {
 	unsigned int eventNumber = event.m_data[0];
 
@@ -28,32 +26,35 @@ bool CEventRouter::RouteEvent(CRouterEvent& event)
 	{
 	case CTokenManager::video:
 		{
-			if(pVideo)
-			{
-				event.Shift(1);
-				return pVideo->EventReceiver(event).error;
-			}
+			event.Shift(1);
+			return Video.EventReceiver(event).error;
 		}
 		break;
 	case CTokenManager::sound:
 		{
-			if(pSound)
-			{
-				event.Shift(1);
-				return pSound->EventReceiver(event).error;
-			}
+			event.Shift(1);
+			return Sound.EventReceiver(event).error;
+		}
+		break;
+	case CTokenManager::gui:
+		{
+			event.Shift(1);
+			return Gui.EventReceiver(event).error;
 		}
 		break;
 	case CTokenManager::input:
 		{
-			if(pInput)
-			{
-				event.Shift(1);
-				return pInput->EventReceiver(event).error;
-			}
+			event.Shift(1);
+			return Gui.EventReceiver(event).error;
 		}
 		break;
-	case CTokenManager::console:
+	case CTokenManager::hsi:
+		{
+			event.Shift(1);
+			return Hsi.EventReceiver(event).error;
+		}
+		break;
+/*	case CTokenManager::console:
 		{
 			if(pConsole)
 			{
@@ -79,7 +80,7 @@ bool CEventRouter::RouteEvent(CRouterEvent& event)
 				return pResource->EventReceiver(event).error;
 			}
 		}
-		break;
+		break;*/
 	default:
 		{
 			return false;

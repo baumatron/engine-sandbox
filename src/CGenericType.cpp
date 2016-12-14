@@ -272,3 +272,5 @@ CGenericType CGenericType::FromString(string data)
 	}
 	return result;
 }
+
+

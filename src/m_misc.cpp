@@ -26,7 +26,7 @@ std::string to_string(T t, std::ios_base & (*f)(std::ios_base&))
 
 M_DataTypes M_DetermineType(string data)
 {
-	bool d(true); // double
+	bool d(true); // float
 	bool l(true);  // long
 	bool b(false); // bool
 	for(int i = 0; i < data.length(); i++)
@@ -55,38 +55,14 @@ M_DataTypes M_DetermineType(string data)
 		return t_string;
 }
 
-string M_ftoa(double number)
+string M_ftoa(float number)
 {
 	return to_string(number, std::dec);
 }
 
 string M_itoa(long number)
 {
-	string product;
-	char baseChar = '0';
-	if(number < 0) // its negative
-	{
-		product += '-';
-		number = -number; // avoid confusion when converting
-	}
-	bool haveFoundNonzeroDigit(false);
-	double power(.0001);
-	for(long divisor = 100000; divisor != 1; divisor/=10, power*=10)
-	{
-		if(!haveFoundNonzeroDigit)
-		{
-			if( ( (long) ((number % divisor) * power) ) != 0 ) // gets rid of numbers to left of current digit and allows truncation of digits to the right
-				haveFoundNonzeroDigit = true;
-		}
-		if(haveFoundNonzeroDigit)
-		{
-			product += baseChar + (char)(long)((number % divisor) * power);
-		}
-
-	}
-	if(product == "")
-		product = "0";
-	return product;
+	return to_string(number, std::dec);
 }
 
 string M_btoa(bool number)
@@ -100,6 +76,7 @@ string M_btoa(bool number)
 
 string M_itoah(unsigned short number, unsigned short placeCount, bool prefix) // hexadecimal output placecount = 4 for a word, 2 for a char
 {
+	return to_string(number, std::hex); // does this work?
 	string product;
 	string backwardsProduct;
 	char digit;

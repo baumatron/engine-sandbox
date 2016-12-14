@@ -7,7 +7,7 @@
 
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include <GL/glut.h>
+//#include <GL/glut.h>
 
 #ifdef WIN32
 #include <SDL.h>								// Header File For Windows
@@ -25,7 +25,8 @@ typedef unsigned long VideoResourceID;
 #include "CModel.h"
 #include "threads_main.h"
 //#include "CMilkShapeModel.h"
-
+#include "CCamera.h"
+#include "CCardinalSpline.h"
 #include "math_main.h"
 
 #include <fstream>
@@ -33,7 +34,6 @@ typedef unsigned long VideoResourceID;
 #include <string>
 using namespace std;
 class V_SystemData;
-
 
 enum DrawingModes { ingame = 0, editor, debug};
 
@@ -221,6 +221,7 @@ public:
 	short textureId; // index of texture
 };
 
+// vid_Camera is OBSOLETE
 class vid_Camera: public vid_SceneObject
 {
 public:
@@ -230,6 +231,10 @@ public:
 	const v3d getPosition(){return collapseTransforms().getTranslation();}
 	const v3d getAngle(){return collapseTransforms().getRot();}
 	const v3d getDestpositionAngleFromOrigin();
+
+	v3d worldToCameraSpace(const v3d& rhs);
+	void lookAt(v3d position);
+
 	enum Mode {free, track, lock}; // track is x+y lock is x+y+angle
 	enum TransType {none, average, linear};
 	enum TargetType {uid, location};
@@ -255,78 +260,6 @@ private:
 	v3d position;*/
 };
 
-class CViewport
-{
-public:
-	CViewport(){}
-	~CViewport(){}
-	
-	void SetUpViewport()
-	{
-		glViewport(area.leftx, area.bottomy, area.rightx, area.topy);
-/*		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
-		glLoadIdentity();
-	
-		if( (area.leftx-area.rightx) != 0 )
-			gluPerspective(85.0f, (area.leftx-area.rightx) / (area.topy-area.bottomy), 2.0f, 1000.0f);
-	
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glLoadIdentity();
-	
-		glRotatef(-camera.getAngle().x,1, 0, 0);
-		glRotatef(-camera.getAngle().y,0, 1, 0);
-		glRotatef(-camera.getAngle().z,0, 0, 1);
-		glTranslatef(-camera.getPosition().x, -camera.getPosition().y, -camera.getPosition().z);
-	
-		glEnable(GL_CULL_FACE);
-		glEnable(GL_DEPTH_TEST);*/
-	}
-	
-	void SetUpGLViewport2d()
-	{
-		glViewport(area.leftx, area.bottomy, area.rightx, area.topy);
-/*		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();										// Store The Projection Matrix
-		glLoadIdentity();
-		gluOrtho2D( 0, Video.settings.getSw(), 0, Video.settings.getSh() );
-	
-		glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
-		glPushMatrix();										// Store The Modelview Matrix
-		glLoadIdentity();									// Reset The Modelview Matrix
-	
-		if(usecam)
-		{	
-			glTranslatef(Video.settings.getSw()/2, Video.settings.getSh()/2, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
-			glRotatef(-camera.getAngle().z, 0, 0, 1);
-	
-			glTranslatef(pivot.camcoords(camera).x, pivot.camcoords(camera).y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
-			position.x-=pivot.x;//Video.camPosition.x;
-			position.y-=pivot.y;//Video.camPosition.y;
-			glRotatef(rotateangle, 0, 0, 1);
-		}
-		else
-		{
-			glTranslatef(pivot.x, pivot.y, 0);
-			position.x-=pivot.x;
-			position.y-=pivot.y;
-			glRotatef(rotateangle, 0, 0, 1);
-		}*/
-	}
-	
-/*	void ResetGLViewport()
-	{
-		glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
-		glPopMatrix();										// Restore The Old Projection Matrix
-		glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
-		glPopMatrix();										// Restore The Old Projection Matrix
-	}*/
-//private:
-	CRectangle area;
-	//vid_Camera camera;
-	//float xUnitCount, yUnitCount;
-};
 
 class vid_SceneGraph
 {
@@ -378,7 +311,7 @@ public:
 	vid_VCout& operator<<(const char* rhs);	
 	vid_VCout& operator<<(char rhs);
 	vid_VCout& operator<<(unsigned char rhs);
-	vid_VCout& operator<<(double rhs);
+	vid_VCout& operator<<(float rhs);
 	vid_VCout& operator<<(int rhs);
 	vid_VCout& operator<<(long int rhs);
 	vid_VCout& operator<<(unsigned long int rhs);
@@ -387,15 +320,22 @@ public:
 	vid_VCout& operator<<(bool rhs);
 
 	vid_VCout& setFont(const string& fontName);
-	vid_VCout& setWeight(const unsigned short weight);
-	vid_VCout& setHeight(const unsigned short height);
+	vid_VCout& setBounds(CRectangle newBounds);
+	vid_VCout& setSize(const unsigned short newSize);
+	float getHeight();
+	float getAscender();
+	float getDescender();
+	float getAdvance(string text);
 	vid_VCout& setPos(v3d position);
 	vid_VCout& setPosScaled(v3d position);
 	vid_VCout& setColor(CColor color);
+	bool clipToBounds;
 private:
+	CRectangle bounds;
 	v3d drawPosition;
 	CColor drawColor;
-	vidw_Font* font;
+	string fontname;
+	int size;
 	void print(string text);
 };
 
@@ -443,6 +383,17 @@ private:
 	vector<TableEntry> resourceTable;
 };
 
+class CViewportContext
+{
+public:
+	enum ViewportContextTypes {independent = 0, additive}; // independent viewports don't add to each other
+	
+	CRectangle area;
+	unsigned int virtualPixelWidth;
+	unsigned int virtualPixelHeight;
+	ViewportContextTypes viewportContextType;
+};
+
 class vid_Settings
 {
 public:
@@ -465,9 +416,9 @@ public:
 	const bool& getFullscreen() const;
 	const float& getZoom() const;
 
-	bool lighting;
-
+	bool modelsUseDisplayLists;
 private:
+
 	short swScaled;
 	short shScaled;
 	short bpp;
@@ -476,6 +427,10 @@ private:
 	bool fullscreen;
 	float zoom;
 };
+
+
+
+
 class CVideoSubsystem: public IThinkSubsystem
 {
 public:
@@ -489,6 +444,7 @@ public:
 	virtual void Think();
 
 	virtual CRouterReturnCode EventReceiver(CRouterEvent& event);
+	virtual bool InputReceiver(const CInputEvent& event);
 
 ////////////////////////
 
@@ -510,42 +466,77 @@ public:
 	void BlitBitmap(unsigned long* data,					v3d position, v3d size, float rotateangle = 0, v3d pivot = v3d(0,0,0), bool usecam = false, bool stencil = false);
 	void BlitBitmap(VideoResourceID videoResourceID,		v3d position, v3d size, float rotateangle = 0, v3d pivot = v3d(0,0,0), bool usecam = false, bool stencil = false);
 	void BlitBitmapScaled(VideoResourceID videoResourceID,	v3d position, v3d size, float rotateangle = 0, v3d pivot = v3d(0,0,0), bool usecam = false, bool stencil = false);
-	void BlitRect(v3d p1, v3d p2, CColor color1, CColor color2);
+	void DrawRectangle4color(vid_Point p1, CColor p2color, vid_Point p3, CColor p4color); // points must be in rectangle shape... 4 points for color information
+	void DrawRectangleGradient(v3d p1, v3d p2, CColor color);
+	void DrawRectangle(v3d p1, v3d p2, CColor color);
 	void DrawLine(short x1, short y1, float zVal1, short x2, short y2, float zVal2, unsigned long color);
-	void DrawLine(v3d start, v3d end, unsigned long color, bool usecam = true);
+	void DrawLine(v3d start, v3d end, rgba8888pixel color, bool usecam = true);
 	void DrawLineScaled(v3d start, v3d end, unsigned long color, bool usecam = true);
 	void DrawTriangle(short x1, short y1, short x2, short y2, short x3, short y3, unsigned long color); // wireframe for now
 	void DrawTriangle3d(vid_Point p1, vid_Point p2, vid_Point p3, v3d normal, short textureId);
-	void DrawModel(const CModel& model);
+//	void DrawModel(const CCalModel& model, CCamera& camera);
+	void DrawDisplayList(GLuint& list, matrix4x4& transformation, CCamera& camera);
+//	GLuint GenerateDisplayListFromModel(const CCalModel& model);
+	void DrawStar(float starDiameter, matrix4x4 worldMatrix, const CCamera& camera);
+	void DrawLensFlare(VideoResourceID texture, float width, v3d position, CCamera& camera);
+	void DrawLabel(string text, string fontname, int size, CColor color, v3d position, CCamera& camera);
 	void DrawTextShit(string text, short x, short y, unsigned short lineWidth);
+	void DrawCardinalSpline(CCardinalSpline& spline, CCamera& camera);
 
+	void DrawOrbit(v3d center, float radius, CColor& color, CCamera& camera); // for drawing orbits in the system view
+
+	v3d ProjectPoint(v3d worldSpacePoint); // returns a 2d projected point for the current viewport context and projection and modelview matrices
+
+	//  main rendering function
+	void SetBackgroundRenderer(void (* renderer) (void));
+
+	// lighting functions
 	short MakeLight(unsigned long ambient, unsigned long diffuse); // returns an id to a useable light
 	void KillLight(short id); // kills light with this id
 	vid_SceneObject* GetLight(short id);
 	void SetLightAmbient(short id, unsigned long ambient);
 	void SetLightDiffuse(short id, unsigned long diffuse);
 	
-	void SetUpProjection2d();
-	void SetUpProjection3d();
-	void ResetProjection();
-	void SetViewport();
-	void SetViewport(CViewport viewport);
+	// opengl projection shortcut functions
+	void PushProjection2d();
+	void PushProjection3d();
+	void PopProjection();
+	
+	// viewport functionality
+	void PushViewportContext(CViewportContext context);
+	CViewportContext PopViewportContext();
+	CViewportContext TopViewportContext();
+	void ResetViewportContexts();
+	
+	void RenderText(string font, string text, v3d position, CColor color, CRectangle clippingRegion = CRectangle(), bool clip = false);
+
 	// gui widget drawing
-	void DrawProgressBar(CRectangle area, float percent, CColor barColor1, CColor barColor2, CColor backgroundColor);
+	void DrawButton(CRectangle area, CColor color, string caption, bool down = false);
+	void DrawProgressBar(CRectangle area, float percent, CColor barColor, CColor backgroundColor);
+	void DrawSlider(CRectangle area, float percent);
+	void DrawScrollBar(CRectangle area, float percent, bool horizontal = false);
+	void DrawTextField(CRectangle area, CColor textColor, CColor backgroundColor, CColor borderColor, string text);
+	void DrawTextStatic(CRectangle area, CColor textColor, string text);
+	void DrawWindow(CRectangle area, CColor backgroundColor, bool gradient = false, bool titleBar = false, CColor titleBarColor = CColor(1.0f, 1.0f, 1.0f), string titleBarCaption = "");
 
 	vid_VCout vcout;
 	CVideoResourceManager VideoResourceManager;
-	vid_Camera camera;
+	CCamera camera;
 	vid_Settings settings;
 private:
+	vector<CViewportContext> viewportContextStack;
+	void SetGLViewport();
+		
 	vector<void (*) (void)> m_initAuxList;
-	V_SystemData* p_systemData; // for all the shit that requires funky headers and shit (audiere)
+	void (*m_backgroundRenderer) (void);
+	V_SystemData* p_systemData; // for all the shit that requires funky headers and shit
 	
 	//int idCount;
 	bool initialized;
 };
 
 extern CVideoSubsystem Video;
+
 
 class vid_Zone: public vid_SceneObject
 {
@@ -899,8 +890,8 @@ public:
 	bn_TreeDoodad():bn_Doodad()
 	{
 		//groundTexture = -1;//Video.VideoResourceManager.LoadImageToVideoMemory("data\images\world\land\Grass3x3seamless.bmp");
-		shadowTexture = Video.VideoResourceManager.LoadImageToVideoMemory("data\\images\\world\\trees\\layered\\Large4x4shadow.bmp");
-		objectTexture = Video.VideoResourceManager.LoadImageToVideoMemory("data\\images\\world\\trees\\layered\\Large4x4noaa.bmp");
+		shadowTexture = (short)Video.VideoResourceManager.LoadImageToVideoMemory("data\\images\\world\\trees\\layered\\Large4x4shadow.bmp");
+		objectTexture = (short)Video.VideoResourceManager.LoadImageToVideoMemory("data\\images\\world\\trees\\layered\\Large4x4noaa.bmp");
 		setSize(v3d(256, 256));
 	}
 	~bn_TreeDoodad(){}

@@ -51,11 +51,18 @@ struct TargaImage
 	unsigned char* imageData;
 	unsigned long imageDataSize;
 };
+
+struct TargaRLEPacketHeader
+{
+	unsigned char packetId : 1; // 0 == raw packet, 1 == run length packet
+	unsigned char pixelCount : 7; // number of pixels in the packet
+};
 #pragma pack()
 
 bool CTargaImageLoader::IsReaderForFile(const string filename)
 {
-	if(filename.substr(filename.length()-4, 4) == ".tga")
+	string extention = filename.substr(filename.length()-4, 4);
+	if(extention == ".tga")
 		return true;
 	else
 		return false;
@@ -313,11 +320,70 @@ bool CTargaImageLoader::ReadFromFile(CImage& image, const string filename)
 				break;
 			case 32:
 				{
-					for(int y = 0; y < targaImage.header.imageSpecification.height; y++)
+					int pixelNumber = 0;
+					int uncompressedDataCursor = 0;
+					// i is source cursor
+					// uncompressedDataCursor is destination cursor
+					for(int i = 0; uncompressedDataCursor < targaImage.imageDataSize; i++)
+					{
+						TargaRLEPacketHeader packetHeader;
+						packetHeader = ((TargaRLEPacketHeader*)targaImage.imageData)[i];
+						bgra8888pixel pixel;
+						int uncompressedPacketSize = 0;
+						if(packetHeader.packetId == 0)
+						{ // raw packet
+							for(int j = 0; j <= packetHeader.pixelCount; j++)
+							{
+								pixel = *((bgra8888pixel*) (&targaImage.imageData[ i+j*4 ]));
+
+								image.buffer[pixelNumber].components.r = pixel.components.r;
+								image.buffer[pixelNumber].components.g = pixel.components.g;
+								image.buffer[pixelNumber].components.b = pixel.components.b;
+								
+								if(targaImage.header.imageSpecification.imageDescriptorByte.pixelAttributeBits == 8)
+									image.buffer[pixelNumber].components.a = pixel.components.a;
+								else
+									image.buffer[pixelNumber].components.a = 255;
+								
+								pixelNumber++;
+							}
+							i += (packetHeader.pixelCount + 1)*4;
+							// size of a packet uncompressed is (packetHeader.pixelCount + 1)*4
+							uncompressedPacketSize = (packetHeader.pixelCount + 1)*4;
+						}
+						else
+						{ // rle packet
+							pixel = *((bgra8888pixel*) (&targaImage.imageData[ i+1 ]));
+							for(int j = 0; j <= packetHeader.pixelCount; j++)
+							{
+								image.buffer[pixelNumber].components.r = pixel.components.r;
+								image.buffer[pixelNumber].components.g = pixel.components.g;
+								image.buffer[pixelNumber].components.b = pixel.components.b;
+								
+								if(targaImage.header.imageSpecification.imageDescriptorByte.pixelAttributeBits == 8)
+									image.buffer[pixelNumber].components.a = pixel.components.a;
+								else
+									image.buffer[pixelNumber].components.a = 255;
+								
+								pixelNumber++;
+							}
+							i += 1*4;//(packetHeader.pixelCount + 1)*4;
+							// size of a packet uncompressed is (packetHeader.pixelCount + 1)*4
+							uncompressedPacketSize = (packetHeader.pixelCount + 1)*4;
+						}
+							if(pixelNumber >= 524288)
+								break;
+								//ccout << "Break\n";
+						uncompressedDataCursor += uncompressedPacketSize;
+					}
+					ccout << "number of pixels was: " << pixelNumber-1 << newl;
+
+			/*		for(int y = 0; y < targaImage.header.imageSpecification.height; y++)
 					{
 						for(int x = 0; x < targaImage.header.imageSpecification.width; x++)
 						{
 							bgra8888pixel pixel;
+							TargaRLEPacketHeader packetHeader;
 							if(targaImage.header.imageSpecification.imageDescriptorByte.screenOrigin == 0) // lower left origin
 								pixel = ((bgra8888pixel*)targaImage.imageData)[x+y*targaImage.header.imageSpecification.width];
 							else	// upper left origin
@@ -332,7 +398,7 @@ bool CTargaImageLoader::ReadFromFile(CImage& image, const string filename)
 							else
 								image.buffer[x+y*targaImage.header.imageSpecification.width].components.a = 255;
 						}
-					}
+					}*/
 				}
 				break;
 			}

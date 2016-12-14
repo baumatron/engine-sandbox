@@ -1,14 +1,25 @@
 #ifndef CTYPEABSTRACTIONLAYER_H
 #define CTYPEABSTRACTIONLAYER_H
 
+#include "m_misc.h"
+
 #include <string>
 using namespace std;
-#include "m_misc.h"
 
 class CGenericType
 {
 public:
 	CGenericType(M_DataTypes type):m_type(type){}
+	CGenericType(const bool& value):m_type(t_bool){SetValue(value);}
+	CGenericType(const char& value):m_type(t_char){SetValue(value);}
+	CGenericType(const unsigned char& value):m_type(t_uchar){SetValue(value);}
+	CGenericType(const short& value):m_type(t_short){SetValue(value);}
+	CGenericType(const unsigned short& value):m_type(t_ushort){SetValue(value);}
+	CGenericType(const long& value):m_type(t_long){SetValue(value);}
+	CGenericType(const unsigned long& value):m_type(t_ulong){SetValue(value);}
+	CGenericType(const float& value):m_type(t_float){SetValue(value);}
+	CGenericType(const double& value):m_type(t_double){SetValue(value);}
+	CGenericType(const string& value):m_type(t_string){SetValue(value);}	
 
 	M_DataTypes GetType() const;
 

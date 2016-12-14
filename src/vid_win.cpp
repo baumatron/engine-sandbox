@@ -8,7 +8,7 @@
 #include "m_misc.h"
 //#include "in_main.h"
 //#include "bn_main.h"
-#include "CModel.h"
+#include "CCalModel.h"
 
 #ifdef WIN32
 #include <windows.h>								// Header File For Windows
@@ -16,13 +16,27 @@
 
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include <GL/glut.h>
+//#include <GL/glut.h>
 
 #ifdef WIN32
 #include <SDL.h>								// Header File For Windows
 #else
 #include <SDL/SDL.h>
 #endif
+
+//#include <FTGL.h>
+/*
+#include <FTGLOutlineFont.h>
+
+#include "FTGLPolygonFont.h"
+
+#include "FTGLBitmapFont.h"*/
+
+#include "CFontManager.h"
+
+#include <FTGLTextureFont.h>
+
+#include <FTGLPixmapFont.h>
 
 //#include <gl/glaux.h>
 
@@ -83,10 +97,11 @@ public:
 
 		v3d temp = collapseTransforms().getTranslation();
 		matrix4x4 trans;
-		trans = TranslationMatrix(Video.camera.getPosition()*-1);
+		trans = Video.camera.GetTransformation().getInverse();
+	/*	trans = TranslationMatrix(Video.camera.GetTransformation().getTranslation()*-1);
 		temp = trans * temp;
 		trans = RotationMatrix(Video.camera.getAngle()*-1);//mat.mtfXRot(Video.cam.getAngle().x*-1) * mat.mtfYRot(Video.cam.getAngle().y*-1) * mat.mtfZRot(Video.cam.getAngle().z*-1);
-		temp = trans * temp;
+		temp = trans * temp;*/
 	//	ccout << "light: " << collapseTransforms().getTranslation() << " light positon translated: " << temp << newl;
 		/*v3d temp = position;
 		temp.rotate(Video.cam.getPosition(), Video.cam.getAngle().x*-1, Video.cam.getAngle().y, Video.cam.getAngle().z*-1);
@@ -124,7 +139,7 @@ void Flip();
 
 GLvoid VIDW_ReSizeGLScene(GLsizei width, GLsizei height)				// Resize And Initialize The GL Window
 {
-	if (height==0)								// Prevent A Divide By Zero By
+/*	if (height==0)								// Prevent A Divide By Zero By
 	{
 		height=1;							// Making Height Equal One
 	}
@@ -138,14 +153,14 @@ GLvoid VIDW_ReSizeGLScene(GLsizei width, GLsizei height)				// Resize And Initia
 	gluPerspective(45.0f,width/height,2.0f,1000.0f);
 
 	glMatrixMode(GL_MODELVIEW);						// Select The Modelview Matrix
-	glLoadIdentity();							// Reset The Modelview Matrix
+	glLoadIdentity();							// Reset The Modelview Matrix*/
 }
 
 bool InitGL(GLvoid)								// All Setup For OpenGL Goes Here
 {
 	glEnable(GL_TEXTURE_2D);	// enables texturing
 	glShadeModel(GL_SMOOTH);						// Enables Smooth Shading
-	glClearColor(1.0f, 1.0f, 1.0f, 1);		
+	glClearColor(0.0f, 0.0f, 0.0f, 1);		
 	glClearDepth(1.0f);								// Depth Buffer Setup
 	glEnable(GL_DEPTH_TEST);						// Enables Depth Testing
 	glDepthFunc(GL_LEQUAL);							// The Type Of Depth Test To Do
@@ -169,7 +184,7 @@ GLvoid KillGLWindow(GLvoid)							// Properly Kill The Window
 	SDL_Quit();
 }
 
-bool CreateGLWindow(char* title, int width, int height, int bpp, bool fullscreen)
+bool CreateGLWindow(char* title, short width, short height, short bpp, bool fullscreen)
 {
 	Video.settings.setBpp(bpp);
 	Video.settings.setSw(width);
@@ -194,6 +209,7 @@ bool CreateGLWindow(char* title, int width, int height, int bpp, bool fullscreen
 		return false;
 	}
 	SDL_GL_GetAttribute( SDL_GL_STENCIL_SIZE, &size);
+	SDL_WM_SetCaption("Hot Space Injection", "");
 
 	VIDW_ReSizeGLScene(width, height);						// Set Up Our Perspective GL Screen
 
@@ -264,69 +280,7 @@ void VIDW_Shutdown()
 	SDL_Quit();
 }
 
-void VIDW_DrawLine(v3d start, v3d end, unsigned long color, bool usecam)
-{
-	if(!vidw_initialized)
-		return;
-
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();										// Store The Projection Matrix
-	glLoadIdentity();
-	gluOrtho2D( 0, Video.settings.getSw(), 0, Video.settings.getSh() );
-
-	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
-	glPushMatrix();										// Store The Modelview Matrix
-	glLoadIdentity();									// Reset The Modelview Matrix
-
-	if(usecam)
-	{	
-		glTranslatef(Video.settings.getSw()/2, Video.settings.getSh()/2, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
-		glRotatef(-Video.camera.getAngle().z, 0, 0, 1);
-		start-=Video.camera.getPosition();
-		end-=Video.camera.getPosition();
-	//	glTranslatef(/*Video.sw/2+*/pivot.camcoords(Video.cam).x, /*vid_Settings.getSh()/2+*/pivot.camcoords(Video.cam).y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
-	//	position.x-=pivot.x;//Video.camPosition.x;
-	//	position.y-=pivot.y;//Video.camPosition.y;
-	//	glRotatef(rotateangle/*-Video.camAngle.z*/, 0, 0, 1);
-	}
-	else
-	{
-	//	glTranslatef(pivot.x, pivot.y, 0);
-	//	position.x-=pivot.x;
-	//	position.y-=pivot.y;
-	//	glRotatef(rotateangle, 0, 0, 1);
-	}
-
-	if(/*Video.lighting*/false)
-		glEnable(GL_LIGHTING);
-	else
-		glDisable(GL_LIGHTING);
-
-
-	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
-
-	glDisable(GL_BLEND);
-	glDisable(GL_TEXTURE_2D);
-
-	glBegin(GL_LINES);						
-		glColor3f( ((float)_EXTRACTRED(color))/256, ((float)_EXTRACTGREEN(color))/256, ((float)_EXTRACTBLUE(color))/256);
-		glVertex3f(start.x,start.y,start.z); 
-
-		glVertex3f(end.x,end.y,end.z); 
-		glColor3f( 1.0, 1.0, 1.0 );
-	glEnd();
-
-//	glDisable(GL_BLEND);
-
-//	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
-
-	glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
-	glPopMatrix();										// Restore The Old Projection Matrix
-	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
-	glPopMatrix();										// Restore The Old Projection Matrix
-}
-
-void VIDW_DrawLineScaled(v3d start, v3d end, unsigned long color, bool usecam)
+void VIDW_DrawLineScaled(v3d start, v3d end, rgba8888pixel color, bool usecam)
 {
 	if(!vidw_initialized)
 		return;
@@ -344,11 +298,13 @@ void VIDW_DrawLineScaled(v3d start, v3d end, unsigned long color, bool usecam)
 
 	if(usecam)
 	{	
-		glTranslatef(width/2, height/2, 0);
+	/*	glTranslatef(width/2, height/2, 0);
 		glRotatef(-Video.camera.getAngle().z, 0, 0, 1);
 
 		start-=Video.camera.getPosition();
-		end-=Video.camera.getPosition();
+		end-=Video.camera.getPosition();*/
+		glLoadMatrixf((Video.camera.GetTransformation().getInverse()).matrix);
+
 /*		glTranslatef(pivot.camcoords(Video.cam).x, pivot.camcoords(Video.cam).y, 0);
 		position.x-=pivot.x;
 		position.y-=pivot.y;
@@ -379,7 +335,7 @@ void VIDW_DrawLineScaled(v3d start, v3d end, unsigned long color, bool usecam)
 
 //	glColor3f( 1, 1, 1 );
 	glBegin(GL_LINES);
-		glColor3f( ((float)_EXTRACTRED(color))/255.0, ((float)_EXTRACTGREEN(color))/255.0, ((float)_EXTRACTBLUE(color))/255.0 );
+		glColor3f( ((float)_EXTRACTRED(color.pixel))/255.0, ((float)_EXTRACTGREEN(color.pixel))/255.0, ((float)_EXTRACTBLUE(color.pixel))/255.0 );
 		glVertex3f(start.x,start.y,start.z);
 
 		glVertex3f(end.x,end.y,end.z);
@@ -410,7 +366,7 @@ void VIDW_DrawTriangle3d(vid_Point p1, vid_Point p2, vid_Point p3, v3d normal, s
 //	if(vid_Settings.getShScaled())
 //		gluPerspective(45.0f, ((GLsizei)vid_Settings.getSwScaled()) / ((GLsizei)vid_Settings.getShScaled()) ,0.1f,5000.0f);
 		
-	gluPerspective(85.0f, (double)Video.settings.getSw() / (double)Video.settings.getSh(), 2.0f, 1000.0f);
+	gluPerspective(45.0f, (float)Video.settings.getSw() / (float)Video.settings.getSh(), 2.0f, 5000000.0f);
 
 	glMatrixMode(GL_MODELVIEW);
 	glPushMatrix();
@@ -435,10 +391,11 @@ void VIDW_DrawTriangle3d(vid_Point p1, vid_Point p2, vid_Point p3, v3d normal, s
 	}*/
 
 
-	glRotatef(-Video.camera.getAngle().x,1, 0, 0);
+	glLoadMatrixf((Video.camera.GetTransformation().getInverse()).matrix);
+/*	glRotatef(-Video.camera.getAngle().x,1, 0, 0);
 	glRotatef(-Video.camera.getAngle().y,0, 1, 0);
 	glRotatef(-Video.camera.getAngle().z,0, 0, 1);
-	glTranslatef(-Video.camera.getPosition().x, -Video.camera.getPosition().y, -Video.camera.getPosition().z);
+	glTranslatef(-Video.camera.getPosition().x, -Video.camera.getPosition().y, -Video.camera.getPosition().z);*/
 
 
 	if(textureId >= 0)
@@ -461,10 +418,6 @@ void VIDW_DrawTriangle3d(vid_Point p1, vid_Point p2, vid_Point p3, v3d normal, s
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 
-	if(Video.settings.lighting)
-		glEnable(GL_LIGHTING);
-	else
-		glDisable(GL_LIGHTING);
 //	glDisable(GL_BLEND);
 
 	glBegin(GL_TRIANGLES);						// Drawing Using Triangles
@@ -499,86 +452,7 @@ void VIDW_DrawTriangle(float x1,float y1,float x2,float y2,float x3,float y3,uns
 
 }
 
-void VIDW_DrawModel(const CModel& model)
-{
-	if(!vidw_initialized)
-		return;
 
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-	glLoadIdentity();
-
-	if(Video.settings.getSh())
-		gluPerspective(85.0f, (double)Video.settings.getSw() / (double)Video.settings.getSh(), 2.0f, 1000.0f);
-
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-	glLoadIdentity();
-
-	glRotatef(-Video.camera.getAngle().x,1, 0, 0);
-	glRotatef(-Video.camera.getAngle().y,0, 1, 0);
-	glRotatef(-Video.camera.getAngle().z,0, 0, 1);
-	glTranslatef(-Video.camera.getPosition().x, -Video.camera.getPosition().y, -Video.camera.getPosition().z);
-
-	glEnable(GL_CULL_FACE);
-	glEnable(GL_DEPTH_TEST);
-
-	for(int i = 0; i < model.m_meshCount; i++)
-	{
-		int materialIndex = model.m_pMeshes[i].m_materialIndex;
-		if ( materialIndex >= 0 )
-		{
-			glMaterialfv( GL_FRONT, GL_AMBIENT, model.m_pMaterials[materialIndex].m_ambient );
-			glMaterialfv( GL_FRONT, GL_DIFFUSE, model.m_pMaterials[materialIndex].m_diffuse );
-			glMaterialfv( GL_FRONT, GL_SPECULAR, model.m_pMaterials[materialIndex].m_specular );
-			glMaterialfv( GL_FRONT, GL_EMISSION, model.m_pMaterials[materialIndex].m_emissive );
-			glMaterialf( GL_FRONT, GL_SHININESS, model.m_pMaterials[materialIndex].m_shininess );
-
-			if (model.m_pMaterials[materialIndex].m_texture > 0 )
-			{
-				glBindTexture( GL_TEXTURE_2D, model.m_pMaterials[materialIndex].m_texture );
-				glEnable( GL_TEXTURE_2D );
-			}
-			else
-				glDisable( GL_TEXTURE_2D );
-		}
-		else
-		{
-			glDisable( GL_TEXTURE_2D );
-		}
-
-
-
-		if(Video.settings.lighting)
-			glEnable(GL_LIGHTING);
-		else
-			glDisable(GL_LIGHTING);
-	//	glDisable(GL_BLEND);
-
-		glBegin(GL_TRIANGLES);						// Drawing Using Triangles
-			for(int j = 0; j < model.m_pMeshes[i].m_triangleCount; j++)
-			{
-				int index = model.m_pMeshes[i].m_pTriangleIndices[j];
-				for(int k = 0; k < 3; k++)
-				{
-					glNormal3fv(  model.m_pTriangles[ index ].m_vertexNormals[ k ] );
-					glTexCoord2f( model.m_pTriangles[ index ].m_s[ k ], model.m_pTriangles[ index ].m_t[ k ] ); 
-					glVertex3fv( model.m_pVertices[ model.m_pTriangles[ index ].m_vertexIndices[ k ] ].m_position );	// Top
-				}
-			}
-		glEnd();
-	}
-		
-	glDisable(GL_TEXTURE_2D);
-
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
-
-	glMatrixMode(GL_PROJECTION);
-	glPopMatrix();
-	glMatrixMode(GL_MODELVIEW);
-	glPopMatrix();
-}
 
 
 void VIDW_BlitBitmap(unsigned long* data, v3d position, v3d size, float rotateangle, v3d pivot, bool usecam, bool stencil)
@@ -597,6 +471,7 @@ void VIDW_BlitBitmap(unsigned long* data, v3d position, v3d size, float rotatean
 
 	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
 	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();										// Store The Projection Matrix
@@ -608,11 +483,11 @@ void VIDW_BlitBitmap(unsigned long* data, v3d position, v3d size, float rotatean
 	glLoadIdentity();									// Reset The Modelview Matrix
 	if(usecam)
 	{
-		pivot-=Video.camera.getPosition();
+/*		pivot-=Video.camera.getPosition();
 		glTranslatef(Video.settings.getSw()/2+pivot.x, Video.settings.getSh()/2+pivot.y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
 		position.x-=Video.camera.getPosition().x+pivot.x;//Video.camPosition.x;
 		position.y-=Video.camera.getPosition().y+pivot.y;//Video.camPosition.y;
-		glRotatef(rotateangle-Video.camera.getAngle().z, 0, 0, 1);
+		glRotatef(rotateangle-Video.camera.getAngle().z, 0, 0, 1);*/
 	}
 	else
 	{
@@ -624,10 +499,7 @@ void VIDW_BlitBitmap(unsigned long* data, v3d position, v3d size, float rotatean
 
 	glDisable(GL_TEXTURE_2D);
 
-	if(Video.settings.lighting)
-		glEnable(GL_LIGHTING);
-	else
-		glDisable(GL_LIGHTING);
+	glDisable(GL_LIGHTING);
 //	glDisable(GL_BLEND);
 
 	glColor3f( 1.0, 1.0, 1.0 );
@@ -662,13 +534,13 @@ void VIDW_BlitBitmap(short id, v3d position, v3d size, float rotateangle, v3d pi
 
 	if(usecam)
 	{	
-		glTranslatef(Video.settings.getSw()/2, Video.settings.getSh()/2, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
+	/*	glTranslatef(Video.settings.getSw()/2, Video.settings.getSh()/2, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
 		glRotatef(-Video.camera.getAngle().z, 0, 0, 1);
 
-		glTranslatef(/*Video.sw/2+*/pivot.camcoords(Video.camera).x, /*vid_Settings.getSh()/2+*/pivot.camcoords(Video.camera).y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
+		glTranslatef(pivot.camcoords(Video.camera).x, pivot.camcoords(Video.camera).y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
 		position.x-=pivot.x;//Video.camPosition.x;
 		position.y-=pivot.y;//Video.camPosition.y;
-		glRotatef(rotateangle/*-Video.camAngle.z*/, 0, 0, 1);
+		glRotatef(rotateangle, 0, 0, 1);*/
 	}
 	else
 	{
@@ -678,10 +550,7 @@ void VIDW_BlitBitmap(short id, v3d position, v3d size, float rotateangle, v3d pi
 		glRotatef(rotateangle, 0, 0, 1);
 	}
 
-	if(Video.settings.lighting)
-		glEnable(GL_LIGHTING);
-	else
-		glDisable(GL_LIGHTING);
+	glDisable(GL_LIGHTING);
 
 	glEnable(GL_TEXTURE_2D);
 
@@ -737,13 +606,13 @@ void VIDW_BlitBitmapScaled(short id, v3d position, v3d size, float rotateangle, 
 
 	if(usecam)
 	{	
-		glTranslatef(width/2, height/2, 0);
+	/*	glTranslatef(width/2, height/2, 0);
 		glRotatef(-Video.camera.getAngle().z, 0, 0, 1);
 
 		glTranslatef(pivot.camcoords(Video.camera).x, pivot.camcoords(Video.camera).y, 0);
 		position.x-=pivot.x;
 		position.y-=pivot.y;
-		glRotatef(rotateangle, 0, 0, 1);
+		glRotatef(rotateangle, 0, 0, 1);*/
 	}
 	else
 	{
@@ -753,10 +622,8 @@ void VIDW_BlitBitmapScaled(short id, v3d position, v3d size, float rotateangle, 
 		glRotatef(rotateangle, 0, 0, 1);
 	}
 
-	if(Video.settings.lighting)
-		glEnable(GL_LIGHTING);
-	else
-		glDisable(GL_LIGHTING);
+
+	glDisable(GL_LIGHTING);
 
 
 //	if(stencil) // CHECK OUT glStencilFunc
@@ -837,6 +704,7 @@ void VIDW_BlitRect(v3d p1, v3d p2, CColor color)
 
 	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
 	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_LIGHTING);
 
@@ -1000,6 +868,7 @@ void VIDW_DrawChar(char character, short x, short y)
 	glLoadIdentity();									// Reset The Modelview Matrix
 
 	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 //	glBlendFunc(GL_SRC_ALPHA,GL_ONE);					// Select The Type Of Blending
     glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 //	glShadeModel(GL_SMOOTH);							// Enables Smooth Color Shading
@@ -1212,19 +1081,12 @@ void VIDW_PutText(string text, v3d position, CColor color, const vidw_Font &font
 
 	glColor3f(color.getRFloat(), color.getGFloat(), color.getBFloat());
 
-	// glut stroked
-//	glTranslatef(position.x, position.y, 0.0);
-//	glScalef(0.075, 0.075, 0.075);
-//	for(int i = 0; i < text.size(); i++)
-//		glutStrokeCharacter(GLUT_STROKE_ROMAN, text[i]);
-//	glScalef(1, 1, 1);
-	
-	// glut bitmapped
 	glRasterPos2f(position.x, position.y);
-	for(int i = 0; i < text.size(); i++)
-		glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, text[i]);
-	
-	//font.PutText(text);
+
+    FTFont* ftglfont = FTGLFontManager::Instance().GetFont( "C:\\windows\\Fonts\\arial.ttf", 12);
+	if(ftglfont)
+		ftglfont->Render( text.c_str() );
+
 
 	glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
 	glPopMatrix();										// Restore The Old Projection Matrix

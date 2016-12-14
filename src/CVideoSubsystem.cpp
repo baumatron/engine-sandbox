@@ -5,7 +5,9 @@
 
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include <GL/glut.h>
+//#include <GL/glut.h>
+#include <glod.h>
+
 
 #ifdef WIN32
 #include <SDL.h>								// Header File For Windows
@@ -18,12 +20,13 @@
 #include "CBitmapImageLoader.h"
 #include "CTargaImageLoader.h"
 #include "CVideoSubsystem.h"
+#include "CFontManager.h"
+#include "CXMLParser.h"
 
 #include "con_main.h"
 #include "con_display.h"
 #include "vid_win.h"
-#include "gui_main.h"
-#include "in_main.h"
+//#include "in_main.h"
 #include "sys_main.h"
 
 
@@ -155,17 +158,15 @@ VideoResourceID CVideoResourceManager::LoadImageToVideoMemory(string filename)  
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-//	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL); // this fucker messes up blending
+//	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+//	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+ 
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); // Mipmap Linear Filtering
 
-//	gluBuild2DMipmaps(GL_TEXTURE_2D, 3, bitmap->bitmapinfoheader.biWidth, bitmap->bitmapinfoheader.biHeight, GL_RGBA, GL_UNSIGNED_BYTE, bitmap->buffer); 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, systemImage->GetWidth(), systemImage->GetHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, systemImage->GetBuffer());
+	gluBuild2DMipmaps(GL_TEXTURE_2D, 4, systemImage->GetWidth(), systemImage->GetHeight(), GL_RGBA, GL_UNSIGNED_BYTE, systemImage->GetBuffer()); 
+//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, systemImage->GetWidth(), systemImage->GetHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, systemImage->GetBuffer());
+
 
 	if(!leaveImageInSystemMemory)
 		UnloadImage(videoResourceID);
@@ -203,6 +204,8 @@ void CVideoResourceManager::UnloadImage(VideoResourceID videoResourceID) // unlo
 		if((*it)->GetVideoResourceID() == videoResourceID)
 		{
 			systemMemoryUsage -= (*it)->GetMemoryUsage();
+			GLuint id = ((*it)->GetVideoResourceID());
+			glDeleteTextures(1, &id);
 			delete *it;
 			openglImages.erase(it);
 			return;
@@ -387,7 +390,8 @@ void VID_CON_InitAux()
 }
 
 CVideoSubsystem::CVideoSubsystem():
-	initialized(false)
+	initialized(false),
+	m_backgroundRenderer(0)
 {
 	p_systemData = new V_SystemData;
 }
@@ -408,13 +412,47 @@ bool CVideoSubsystem::Initialize()
 {
 	return Initialize(640, 480, 32, false);
 }
+
+bool IsExtensionSupported( char* szTargetExtension )
+{
+	const unsigned char *pszExtensions = NULL;
+	const unsigned char *pszStart;
+	unsigned char *pszWhere, *pszTerminator;
+
+	// Extension names should not have spaces
+	pszWhere = (unsigned char *) strchr( szTargetExtension, ' ' );
+	if( pszWhere || *szTargetExtension == '\0' )
+		return false;
+
+	// Get Extensions String
+	pszExtensions = glGetString( GL_EXTENSIONS );
+
+	// Search The Extensions String For An Exact Copy
+	pszStart = pszExtensions;
+	for(;;)
+	{
+		pszWhere = (unsigned char *) strstr( (const char *) pszStart, szTargetExtension );
+		if( !pszWhere )
+			break;
+		pszTerminator = pszWhere + strlen( szTargetExtension );
+		if( pszWhere == pszStart || *( pszWhere - 1 ) == ' ' )
+			if( *pszTerminator == ' ' || *pszTerminator == '\0' )
+				return true;
+		pszStart = pszTerminator;
+	}
+	return false;
+}
+
 bool CVideoSubsystem::Initialize(short width, short height, short bpp, bool fullscreen)
 {
 	if(Video.initialized) return true;
 
-	Video.settings.lighting = false;
-
 	VIDW_Init(width, height, bpp, fullscreen);
+
+//	if(!glodInit())
+//		ccout << "GLOD failed to initialize!\n";
+
+	ResetViewportContexts();
 	VIDW_LoadBitmapFont();
 
 	Video.initialized = true;
@@ -424,9 +462,35 @@ bool CVideoSubsystem::Initialize(short width, short height, short bpp, bool full
 		(*it)();
 	}
 
-	vcout.setFont("Courier");
-	vcout.setWeight(500);
-	vcout.setHeight(12);
+	ifstream configFile("config.xml");
+	string fontfile;
+	int fontsize;
+	if(configFile.fail())
+	{
+		ccout << "Warning: no config.xml file found in application directory.";
+		fontfile = "arial.ttf";
+		fontsize = 12;
+	}
+	else
+	{
+		string video = CXMLParser::GetInstance()->GetTagData(configFile, "video");
+		string systemfont = CXMLParser::GetInstance()->GetTagData(video, "systemfont");
+		fontfile = CXMLParser::GetInstance()->GetTagData(systemfont, "file");
+		fontsize = atoi(CXMLParser::GetInstance()->GetTagData(systemfont, "size").c_str());
+	}
+	configFile.close();
+
+	//vcout.setFont("C:\\windows\\Fonts\\arial.ttf");
+	vcout.setFont(fontfile);
+	//vcout.setWeight(500);
+	vcout.setSize(fontsize);
+
+	ccout << "OpenGL Device Information\n";
+	ccout << "Vendor     : " << string((char*)glGetString( GL_VENDOR )) << newl;
+	ccout << "Renderer   : " << string((char*)glGetString( GL_RENDERER )) << newl;
+	ccout << "Version    : " << string((char*)glGetString( GL_VERSION )) << newl;
+	ccout << "Extensions : " << string((char*)glGetString( GL_EXTENSIONS )) << newl << newl;
+	ccout << "GL_ARB_vertex_buffer_object is " << (IsExtensionSupported( "GL_ARB_vertex_buffer_object" ) ? "supported.\n" : "not supported.\n");
 	return true;
 }
 bool CVideoSubsystem::Shutdown()
@@ -438,12 +502,15 @@ bool CVideoSubsystem::Shutdown()
 	p_systemData->clientSceneGraph.clear();
 	p_systemData->twoDStaticSceneGraph.clear();
 
+//	glodShutdown();
+
 	VIDW_Shutdown();
 	return true;
 }
 void CVideoSubsystem::Think()
 {
 	if(!Video.initialized) return;
+	camera.Think();
 	VIDW_UpdateLights();
 }
 
@@ -451,6 +518,12 @@ CRouterReturnCode CVideoSubsystem::EventReceiver(CRouterEvent& event)
 {
 	return CRouterReturnCode(true, false);
 }
+
+bool CVideoSubsystem::InputReceiver(const CInputEvent& event)
+{
+	return false;
+}
+
 
 ////////////////////////
 bool CVideoSubsystem::IsInitialized()
@@ -466,6 +539,8 @@ void CVideoSubsystem::AddInitAuxFunction(void (* function)(void))
 void CVideoSubsystem::BeginDraw()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);			// Clear The Screen And The Depth Buffer
+	if(m_backgroundRenderer)
+		m_backgroundRenderer();
 }
 void CVideoSubsystem::EndDraw()
 {
@@ -482,12 +557,12 @@ void CVideoSubsystem::SetResolution(short width, short height, short bpp, bool f
 {
 	if(!Video.IsInitialized()) return;
 	COND_Shutdown();
-	GUI_Shutdown();
+//	GUI_Shutdown();
 	Shutdown();
 	Initialize(width, height, bpp, fullscreen);
-	GUI_Init();
+//	GUI_Init();
 	COND_Init();
-	IN_ResetSublayer();
+//	IN_ResetSublayer();
 }
 
 /// do something here with a global resource manager
@@ -504,7 +579,7 @@ void CVideoSubsystem::BlitBitmap(unsigned long* data,					v3d position, v3d size
 {
 	if(!Video.initialized) return;
 	VIDW_BlitBitmap(data, position, size, rotateangle, pivot, usecam, stencil);
-}
+} 
 void CVideoSubsystem::BlitBitmap(VideoResourceID videoResourceID,		v3d position, v3d size, float rotateangle, v3d pivot, bool usecam, bool stencil)
 {
 	if(!Video.initialized) return;
@@ -518,12 +593,66 @@ void CVideoSubsystem::BlitBitmapScaled(VideoResourceID videoResourceID,	v3d posi
 	VIDW_BlitBitmapScaled(videoResourceID, position, size, rotateangle, pivot, usecam, stencil);
 }
 
-
-void CVideoSubsystem::BlitRect(v3d p1, v3d p2, CColor color1, CColor color2)
+void CVideoSubsystem::DrawRectangle4color(vid_Point p1, CColor p2color, vid_Point p3, CColor p4color) // only points p1 and p3 are used for coordinates, others are used for color points must be in rectangle shape... 4 points for color information
 {
 	if(!Video.initialized) return;
+	
+	//CColor color2(color);
+	
 
-	glMatrixMode(GL_PROJECTION);
+	/*glMatrixMode(GL_PROJECTION);
+	glPushMatrix();										// Store The Projection Matrix
+	glLoadIdentity();
+	gluOrtho2D( 0, Video.settings.getSw(), 0, Video.settings.getSh() );
+*/
+	PushProjection2d();
+
+
+/*	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+	glPushMatrix();										// Store The Modelview Matrix
+	glLoadIdentity();									// Reset The Modelview Matrix
+*/
+	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
+	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_LIGHTING);
+
+	glBegin(GL_QUADS);						
+		glColor4f( p1.color.getRFloat(), p1.color.getGFloat(), p1.color.getBFloat(), p1.color.getAFloat() );
+		glVertex2f(p1.position.x, p1.position.y); //0,0
+
+		glColor4f( p2color.getRFloat(), p2color.getGFloat(), p2color.getBFloat(), p2color.getAFloat() );
+		glVertex2f(p1.position.x, p3.position.y); // 0,1
+
+		glColor4f( p3.color.getRFloat(), p3.color.getGFloat(), p3.color.getBFloat(), p3.color.getAFloat() );
+		glVertex2f(p3.position.x, p3.position.y);		// 1,1
+
+		glColor4f( p4color.getRFloat(), p4color.getGFloat(), p4color.getBFloat(), p4color.getAFloat() );
+		glVertex2f(p3.position.x, p1.position.y);	// 1,0
+		glColor3f(1.0f, 1.0f, 1.0f);
+	glEnd();
+
+	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
+
+	PopProjection();
+	/*glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
+	glPopMatrix();										// Restore The Old Projection Matrix
+	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+	glPopMatrix();										// Restore The Old Projection Matrix
+*/}
+
+void CVideoSubsystem::DrawRectangleGradient(v3d p1, v3d p2, CColor color1)
+{
+	if(!Video.initialized) return;
+	
+	CColor color2;
+	CColor subtracted(0.2f, 0.2f, 0.2f, 0.0f);
+	color2 = color1 - subtracted;
+
+	PushProjection2d();
+	
+	/*glMatrixMode(GL_PROJECTION);
 	glPushMatrix();										// Store The Projection Matrix
 	glLoadIdentity();
 	gluOrtho2D( 0, Video.settings.getSw(), 0, Video.settings.getSh() );
@@ -531,9 +660,10 @@ void CVideoSubsystem::BlitRect(v3d p1, v3d p2, CColor color1, CColor color2)
 	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
 	glPushMatrix();										// Store The Modelview Matrix
 	glLoadIdentity();									// Reset The Modelview Matrix
-
+*/
 	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
 	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_LIGHTING);
 
@@ -541,9 +671,54 @@ void CVideoSubsystem::BlitRect(v3d p1, v3d p2, CColor color1, CColor color2)
 		glColor4f( color1.getRFloat(), color1.getGFloat(), color1.getBFloat(), color1.getAFloat() );
 		glVertex2f(p1.x,p1.y); //0,0
 
+		glColor4f( color2.getRFloat(), color2.getGFloat(), color2.getBFloat(), color2.getAFloat() );
 		glVertex2f(p1.x,p2.y); // 0,1
 
 		glColor4f( color2.getRFloat(), color2.getGFloat(), color2.getBFloat(), color2.getAFloat() );
+		glVertex2f(p2.x,p2.y);		// 1,1
+
+		glColor4f( color1.getRFloat(), color1.getGFloat(), color1.getBFloat(), color1.getAFloat() );
+		glVertex2f(p2.x,p1.y);	// 1,0
+		glColor3f(1.0f, 1.0f, 1.0f);
+	glEnd();
+
+	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
+
+	PopProjection();
+	
+/*	glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
+	glPopMatrix();										// Restore The Old Projection Matrix
+	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+	glPopMatrix();										// Restore The Old Projection Matrix
+*/}
+
+void CVideoSubsystem::DrawRectangle(v3d p1, v3d p2, CColor color)
+{
+	if(!Video.initialized) return;
+
+	PushProjection2d();
+	
+	/*glMatrixMode(GL_PROJECTION);
+	glPushMatrix();										// Store The Projection Matrix
+	glLoadIdentity();
+	gluOrtho2D( 0, Video.settings.getSw(), 0, Video.settings.getSh() );
+
+	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+	glPushMatrix();										// Store The Modelview Matrix
+	glLoadIdentity();									// Reset The Modelview Matrix
+*/
+	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
+	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_LIGHTING);
+
+	glBegin(GL_QUADS);						
+		glColor4f( color.getRFloat(), color.getGFloat(), color.getBFloat(), color.getAFloat() );
+		glVertex2f(p1.x,p1.y); //0,0
+
+		glVertex2f(p1.x,p2.y); // 0,1
+
 		glVertex2f(p2.x,p2.y);		// 1,1
 
 		glVertex2f(p2.x,p1.y);	// 1,0
@@ -552,19 +727,71 @@ void CVideoSubsystem::BlitRect(v3d p1, v3d p2, CColor color1, CColor color2)
 
 	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
 
-	glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
+	/*glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
 	glPopMatrix();										// Restore The Old Projection Matrix
 	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
 	glPopMatrix();										// Restore The Old Projection Matrix
+*/
+	PopProjection();
+
 }
 void CVideoSubsystem::DrawLine(short x1, short y1, float zVal1, short x2, short y2, float zVal2, unsigned long color)
 {
 	if(!Video.initialized) return;
 }
-void CVideoSubsystem::DrawLine(v3d start, v3d end, unsigned long color, bool usecam)
+void CVideoSubsystem::DrawLine(v3d start, v3d end, rgba8888pixel color, bool usecam)
 {
 	if(!Video.initialized) return;
-	VIDW_DrawLine(start, end, color, usecam);
+	
+	PushProjection2d();
+	
+	if(usecam)
+	{	
+		glLoadMatrixf((camera.GetModelViewMatrix()).matrix);
+
+/*		glTranslatef(Video.settings.getSw()/2, Video.settings.getSh()/2, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
+		glRotatef(-Video.camera.getAngle().z, 0, 0, 1);
+		start-=Video.camera.getPosition();
+		end-=Video.camera.getPosition();*/
+	//	glTranslatef(/*Video.sw/2+*/pivot.camcoords(Video.cam).x, /*vid_Settings.getSh()/2+*/pivot.camcoords(Video.cam).y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
+	//	position.x-=pivot.x;//Video.camPosition.x;
+	//	position.y-=pivot.y;//Video.camPosition.y;
+	//	glRotatef(rotateangle/*-Video.camAngle.z*/, 0, 0, 1);
+	}
+	else
+	{
+	//	glTranslatef(pivot.x, pivot.y, 0);
+	//	position.x-=pivot.x;
+	//	position.y-=pivot.y;
+	//	glRotatef(rotateangle, 0, 0, 1);
+	}
+
+	if(/*Video.lighting*/false)
+		glEnable(GL_LIGHTING);
+	else
+		glDisable(GL_LIGHTING);
+
+
+	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
+
+	glDisable(GL_BLEND);
+	glDisable(GL_TEXTURE_2D);
+
+	glBegin(GL_LINES);
+		glColor3f( ((float)_EXTRACTRED(color.pixel))/256, ((float)_EXTRACTGREEN(color.pixel))/256, ((float)_EXTRACTBLUE(color.pixel))/256);
+		glVertex3f(start.x,start.y,start.z); 
+
+		glVertex3f(end.x,end.y,end.z); 
+		glColor3f( 1.0, 1.0, 1.0 );
+	glEnd();
+
+//	glDisable(GL_BLEND);
+
+//	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
+
+	PopProjection();
+
+
 }
 void CVideoSubsystem::DrawLineScaled(v3d start, v3d end, unsigned long color, bool usecam)
 {
@@ -581,10 +808,360 @@ void CVideoSubsystem::DrawTriangle3d(vid_Point p1, vid_Point p2, vid_Point p3, v
 	if(!Video.initialized) return;
 	VIDW_DrawTriangle3d(p1, p2, p3, normal, textureId);
 }
-void CVideoSubsystem::DrawModel(const CModel& model)
+/*
+void CVideoSubsystem::DrawModel(const CCalModel& model, CCamera& camera)
 {
-	VIDW_DrawModel(model);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+
+	if(Video.settings.getSh())
+		gluPerspective(45.0f, (float)Video.TopViewportContext().area.getWidth() / (float)Video.TopViewportContext().area.getHeight(), 2.0f, 5000000.0f);
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+	glLoadMatrixf((camera.GetModelViewMatrix() * model.worldMatrix).matrix);
+
+	glPushAttrib(GL_ENABLE_BIT);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND); // DISABLED BECAUSE OF BLENDING PROBLEMS /////////////////////////////////////////////////////////////////////
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+
+	for(int i = 0; i < model.m_meshCount; i++)
+	{
+		int materialIndex = model.m_pMeshes[i].m_materialIndex;
+		if ( materialIndex >= 0 )
+		{
+			glMaterialfv( GL_FRONT, GL_AMBIENT, model.m_pMaterials[materialIndex].m_ambient );
+			glMaterialfv( GL_FRONT, GL_DIFFUSE, model.m_pMaterials[materialIndex].m_diffuse );
+			glMaterialfv( GL_FRONT, GL_SPECULAR, model.m_pMaterials[materialIndex].m_specular );
+			glMaterialfv( GL_FRONT, GL_EMISSION, model.m_pMaterials[materialIndex].m_emissive );
+			glMaterialf( GL_FRONT, GL_SHININESS, model.m_pMaterials[materialIndex].m_shininess );
+
+			if (model.m_pMaterials[materialIndex].m_texture > 0 )
+			{
+				glEnable( GL_TEXTURE_2D );
+				glBindTexture( GL_TEXTURE_2D, model.m_pMaterials[materialIndex].m_texture );
+			}
+			else
+				glDisable( GL_TEXTURE_2D );
+		}
+		else
+		{
+			glDisable( GL_TEXTURE_2D );
+		}
+	
+		
+		
+		// Set up the vertex arrays
+	//	glInterleavedArrays(GL_T2F_N3F_V3F, 0, model.m_pMeshes[i].m_pInterleavedVertexArray);
+
+	//	glEnableClientState(GL_VERTEX_ARRAY);
+
+	//	glVertexPointer(3, GL_FLOAT,  sizeof(Vertex), // 1, because there is an extra byte in m_boneID
+	//					(reinterpret_cast<char*>(model.m_pVertices)) + 0); // start past the m_boneID
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glVertexPointer(3, GL_FLOAT,  sizeof(Vertex), // 1, because there is an extra byte in m_boneID
+						(reinterpret_cast<char*>(model.m_pMeshes[i].m_pVertexArray)) + 0); // start past the m_boneID
+		glEnableClientState(GL_NORMAL_ARRAY);
+		glNormalPointer(GL_FLOAT, 0,
+						reinterpret_cast<char*>(model.m_pMeshes[i].m_pNormalArray) + 0);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glTexCoordPointer(2,
+						GL_FLOAT,
+						0,
+						reinterpret_cast<char*>(model.m_pMeshes[i].m_pTextureCoordArray) + 0);
+
+		//glDrawElements(GL_TRIANGLES, model.m_pMeshes[i].m_triangleCount*3, GL_UNSIGNED_INT,
+		//		reinterpret_cast<char*>(model.m_pMeshes[i].m_pTriangleVertexIndices));
+		glDrawArrays( GL_TRIANGLES, 0, model.m_pMeshes[i].m_triangleCount*3 );		// Draw All Of The Triangles At Once
+
+		glDisableClientState( GL_VERTEX_ARRAY );				// Disable Vertex Arrays
+		glDisableClientState( GL_NORMAL_ARRAY );				// Disable Vertex Arrays
+		glDisableClientState( GL_TEXTURE_COORD_ARRAY );				// Disable Texture Coord Arrays
+		
+		
+		
+		//glBegin(GL_TRIANGLES);						// Drawing Using Triangles
+		//	glColor3f(1.0, 1.0, 1.0);			
+		//	for(int j = 0; j < model.m_pMeshes[i].m_triangleCount; j++)
+		//	{
+		//		int index = model.m_pMeshes[i].m_pTriangleIndices[j];
+		//		for(int k = 0; k < 3; k++)
+		//		{
+		//			glNormal3fv(  model.m_pTriangles[ index ].m_vertexNormals[ k ] );
+		//			glTexCoord2f( model.m_pTriangles[ index ].m_s[ k ], model.m_pTriangles[ index ].m_t[ k ] );
+		//			glVertex3fv( model.m_pVertices[ model.m_pTriangles[ index ].m_vertexIndices[ k ] ].m_position );	// Top
+		//		}
+		//	}
+		//glEnd();
+	}
+		
+	glPopAttrib();
+
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+}*/
+void CVideoSubsystem::DrawDisplayList(GLuint& list, matrix4x4& transformation, CCamera& camera)
+{
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+
+	if(Video.settings.getSh())
+		gluPerspective(45.0f, (float)Video.TopViewportContext().area.getWidth() / (float)Video.TopViewportContext().area.getHeight(), 2.0f, 5000000.0f);
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+	glLoadMatrixf((camera.GetModelViewMatrix() * transformation).matrix);
+
+	glCallList(list);
+
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
 }
+/*
+GLuint CVideoSubsystem::GenerateDisplayListFromModel(const CCalModel& model)
+{
+	GLuint displayList = glGenLists(1); // make room for the display list
+
+	glNewList(displayList, GL_COMPILE); // start the list
+
+	glPushAttrib(GL_ENABLE_BIT);
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+//	glBlendFunc(GL_ONE,GL_SRC_ALPHA);							// Set Blending Mode (Cheap / Quick)
+//	glEnable(GL_BLEND);									// Enable Blending
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+	for(int i = 0; i < model.m_meshCount; i++)
+	{
+		int materialIndex = model.m_pMeshes[i].m_materialIndex;
+		if ( materialIndex >= 0 )
+		{
+			glMaterialfv( GL_FRONT, GL_AMBIENT, model.m_pMaterials[materialIndex].m_ambient );
+			glMaterialfv( GL_FRONT, GL_DIFFUSE, model.m_pMaterials[materialIndex].m_diffuse );
+			glMaterialfv( GL_FRONT, GL_SPECULAR, model.m_pMaterials[materialIndex].m_specular );
+			glMaterialfv( GL_FRONT, GL_EMISSION, model.m_pMaterials[materialIndex].m_emissive );
+			glMaterialf( GL_FRONT, GL_SHININESS, model.m_pMaterials[materialIndex].m_shininess );
+
+			if ( model.m_pMaterials[materialIndex].m_texture > 0 )
+			{
+				glEnable( GL_TEXTURE_2D );
+				glBindTexture( GL_TEXTURE_2D, model.m_pMaterials[materialIndex].m_texture );
+			}
+			else
+				glDisable( GL_TEXTURE_2D );
+		}
+		else
+		{
+			float white[] = {1.0f, 1.0f, 1.0f, 1.0f};
+			float black[] = {1.0f, 1.0f, 1.0f, 1.0f};
+			glMaterialfv( GL_FRONT, GL_AMBIENT, black );
+			glMaterialfv( GL_FRONT, GL_DIFFUSE, white );
+			glMaterialfv( GL_FRONT, GL_SPECULAR, black );
+			glMaterialfv( GL_FRONT, GL_EMISSION, black );
+			glMaterialf( GL_FRONT, GL_SHININESS, 0 );
+
+			glDisable( GL_TEXTURE_2D );
+		}
+		
+		glBegin(GL_TRIANGLES);						// Drawing Using Triangles
+			for(int j = 0; j < model.m_pMeshes[i].m_triangleCount; j++)
+			{
+				int index = model.m_pMeshes[i].m_pTriangleIndices[j];
+				for(int k = 0; k < 3; k++)
+				{
+					glNormal3fv(  model.m_pTriangles[ index ].m_vertexNormals[ k ] );
+					glTexCoord2f( model.m_pTriangles[ index ].m_s[ k ], model.m_pTriangles[ index ].m_t[ k ] );
+					glVertex3fv( model.m_pVertices[ model.m_pTriangles[ index ].m_vertexIndices[ k ] ].m_position );	// Top
+				}
+			}
+		glEnd();
+	}
+		
+//	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glPopAttrib();
+	glEndList(); // end the list
+	return displayList;
+}*/
+
+void CVideoSubsystem::DrawStar(float starDiameter, matrix4x4 worldMatrix, const CCamera& camera)
+{
+	/*static CCalModel starModel;
+	static VideoResourceID lensFlare = VideoResourceManager.LoadImageToVideoMemory("flare.tga");
+	if(!starModel.m_pMeshes)
+	{
+		MilkshapeModelLoader.ReadModelFromFile("sun.ms3d");
+		MilkshapeModelLoader.LoadModel(starModel);
+	}
+	
+	// star diameter needs to match 5/32 of the flare image width to line up correctly
+	// so, (starRadius*2) * (32/5) = flare width
+	float flareWidth = starDiameter * 32./5.;
+
+	DrawLensFlare(lensFlare, worldMatrix.getTranslation(), camera);
+	*/
+}
+
+void CVideoSubsystem::DrawLensFlare(VideoResourceID texture, float width, v3d position, CCamera& camera)
+{
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+
+	if(Video.settings.getSh())
+		gluPerspective(45.0f, (float)Video.TopViewportContext().area.getWidth() / (float)Video.TopViewportContext().area.getHeight(), 2.0f, 5000000.0f);
+
+	matrix4x4 projectionMatrix;
+	glGetFloatv(GL_PROJECTION_MATRIX, projectionMatrix.matrix);
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+/*	v3d worldPosition = (camera.transform.getInverse() * TranslationMatrix(position) * camera.transform.getTransform() ) * position;
+	v3d screenPosition = projectionMatrix * worldPosition;*/
+
+	glLoadMatrixf((camera.GetModelViewMatrix() * TranslationMatrix(position) * camera.GetTransformation().getTransform()).matrix);
+
+	glPushAttrib(GL_ENABLE_BIT);
+
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_LIGHTING);
+	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
+	glEnable(GL_BLEND);
+	//glBlendFunc( GL_ONE, GL_ONE);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, texture);				// Select Our Texture
+
+	glBegin(GL_QUADS);
+		glColor3f(1.0f, 1.0f, 1.0f);
+		glTexCoord2f(0.0f, 1.0f);
+		glVertex3f(-width/2, width/2, 0.0f);
+		glTexCoord2f(0.0f, 0.0f);
+		glVertex3f(-width/2, -width/2, 0);
+		glTexCoord2f(1.0f, 0.0f);
+		glVertex3f(width/2, -width/2, 0);
+		glTexCoord2f(1.0f, 1.0f);
+		glVertex3f(width/2, width/2, 0);
+	glEnd();
+//	glDisable(GL_TEXTURE_2D);
+/*	glBegin(GL_LINE_LOOP);
+		glColor3f(1.0f, 1.0f, 1.0f);
+		glVertex3f(position.x-width/2,position.y+width/2,0.0f);
+		glVertex3f(position.x-width/2,position.y-width/2,0.0f);
+		glVertex3f(position.x+width/2,position.y-width/2,0.0f);
+		glVertex3f(position.x+width/2,position.y+width/2,0.0f);
+	glEnd();*/
+		
+	glDisable(GL_TEXTURE_2D);
+
+/*	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);*/
+
+	glPopAttrib();
+
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+}
+void CVideoSubsystem::DrawLabel(string text, string fontname, int size, CColor color, v3d position, CCamera& camera)
+{
+
+	Video.PushProjection3d();
+	glLoadMatrixf((camera.GetModelViewMatrix() * TranslationMatrix(position) * camera.GetTransformation().getTransform()).matrix);
+
+	//	glLoadMatrixf((camera.GetTransformation().getInverse() * TranslationMatrix(modelHighRes.worldMatrix.getTranslation()) * camera.GetTransformation().getTransform()).matrix);
+
+
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_LIGHTING);
+	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+
+	glColor4f(color.getRFloat(), color.getGFloat(), color.getBFloat(), color.getAFloat());	
+	
+	string currentLine;
+	v3d currentDrawPosition = v3d(0,0);
+	float ypitch(12);
+
+	FTFont* font = FTGLFontManager::Instance().GetFont(fontname.c_str(), size);
+	if(font)
+	{
+		ypitch = font->LineHeight();
+	}
+	else
+	{
+		return;
+	}
+		
+	// for the texture font
+	glEnable( GL_TEXTURE_2D);
+	glDisable( GL_DEPTH_TEST);
+	//setUpLighting();
+	glNormal3f( 0.0, 0.0, 1.0);
+
+	int offsetr = -1;
+	int offsetl = 0;
+	//for(int i = 0; i < text.size(); i++)
+	bool done = false;
+	glTranslatef(currentDrawPosition.x, currentDrawPosition.y/*+font->LineHeight()*/, 0.0f);
+	while(!done)
+	{
+		offsetl = offsetr+1;
+		offsetr = text.find('\n', offsetr+1);
+		if(offsetr == -1)
+		{
+			done = true;
+			offsetr = text.size();
+		}
+		glRasterPos2f(currentDrawPosition.x, currentDrawPosition.y);
+		font->Render(text.substr(offsetl, offsetr-offsetl).c_str());
+		glTranslatef(-font->Advance(text.substr(offsetl, offsetr-offsetl-1).c_str()), -ypitch, 0.0f);
+		currentDrawPosition -= v3d(0, ypitch);
+	}
+	if(currentLine.size())
+	{
+		glRasterPos2f(currentDrawPosition.x, currentDrawPosition.y);
+		font->Render(currentLine.c_str());
+	}
+
+/*	glBegin(GL_LINE_LOOP);
+		glColor3f(1.0f, 1.0f, 1.0f);
+		glVertex3f(-100/2,position.y+100/2,0.0f);
+		glVertex3f(-100/2,position.y-100/2,0.0f);
+		glVertex3f(position.x+100/2,position.y-100/2,0.0f);
+		glVertex3f(position.x+100/2,position.y+100/2,0.0f);
+	glEnd();*/
+	/*glDisable(GL_CLIP_PLANE0);
+	glDisable(GL_CLIP_PLANE1);
+	glDisable(GL_CLIP_PLANE2);
+	glDisable(GL_CLIP_PLANE3);*/
+
+	glDisable(GL_SCISSOR_TEST);
+
+		
+	glDisable(GL_TEXTURE_2D);
+
+	Video.PopProjection();
+}
+
+
+
 void CVideoSubsystem::DrawTextShit(string text, short x, short y, unsigned short lineWidth)
 {
 	if(!Video.initialized) return;
@@ -650,6 +1227,96 @@ void CVideoSubsystem::DrawTextShit(string text, short x, short y, unsigned short
 	}
 }
 
+void CVideoSubsystem::DrawCardinalSpline(CCardinalSpline& spline, CCamera& camera)
+{
+	Video.PushProjection3d();
+
+	glLoadMatrixf((camera.GetModelViewMatrix()).matrix);
+
+	glDisable(GL_LIGHTING);
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_DEPTH_TEST);
+
+	glBegin(GL_LINE_STRIP);
+		for(float t = 0; t <= 1.005f; t += 0.01)
+		{
+			v3d vertex = spline.Evaluate(t);
+			glColor3f(t*t,2*t*(1-t),(1-t)*(1-t));
+			glVertex3f(vertex.x, vertex.y, vertex.z);
+		}
+	glEnd();
+	
+	for(float t = 0; t <= 1.05f; t += 0.1)
+	{
+		v3d vertex = spline.Evaluate(t);
+		Video.DrawLabel(M_ftoa(t), "arial.ttf", 14, CColor(1.0f, 1.0f, 1.0f), vertex, camera);
+	}
+
+	Video.PopProjection();
+}
+
+void CVideoSubsystem::DrawOrbit(v3d center, float radius, CColor& color, CCamera& camera) // for drawing orbits in the system view
+{
+	Video.PushProjection3d();
+
+	glLoadMatrixf(camera.GetModelViewMatrix().matrix);
+
+	glPushAttrib(GL_ENABLE_BIT);
+
+	glDisable(GL_LIGHTING);
+	glDisable(GL_TEXTURE_2D);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+
+	v3d vect(radius, 0, 0);
+
+	glBegin(GL_LINE_STRIP);
+		glColor4f(color.getRFloat(), color.getGFloat(), color.getBFloat(), color.getAFloat());
+		for(float angle = 0; angle <= 360; angle += 5.0f)
+		{
+			v3d vertex = center + v3d(vect).rotate(0, v3d(0,angle,0));
+			glVertex3f(vertex.x, vertex.y, vertex.z);
+			//vect.rotate(0, v3d(0,angle,0));
+		}
+	glEnd();
+
+	glPopAttrib();
+
+	Video.PopProjection();
+}
+
+v3d CVideoSubsystem::ProjectPoint(v3d worldSpacePoint) // returns a 2d projected point for the current viewport context and projection and modelview matrices
+{
+	matrix4x4 projectionMatrix, modelViewMatrix;
+	v3d projectedPoint;
+
+	glGetFloatv(GL_PROJECTION_MATRIX, projectionMatrix.matrix);
+	glGetFloatv(GL_MODELVIEW_MATRIX, modelViewMatrix.matrix);
+	projectionMatrix = projectionMatrix * modelViewMatrix;
+
+	// prerform matrix multiplication with a 4x4 matrix and a 4x1 matrix (vector, or v3d with 4th w component)
+	projectedPoint = projectionMatrix * worldSpacePoint;
+	// now, the 4th component of the vector remains
+	float w = ( worldSpacePoint.x * projectionMatrix.matrix[3] +
+			worldSpacePoint.y * projectionMatrix.matrix[7] +
+			worldSpacePoint.z * projectionMatrix.matrix[11] +
+			/*projectedPoint.w == 1 * */projectionMatrix.matrix[15]);
+	projectedPoint /= w; // divide by w to get the (x, y, z, 1.0) vector, which is what we need
+
+	// now, scale the point to match the size of the viewport
+	projectedPoint.x *= Video.TopViewportContext().area.getWidth()/2; 
+	projectedPoint.y *= Video.TopViewportContext().area.getHeight()/2;
+
+	return projectedPoint;
+}
+
+void CVideoSubsystem::SetBackgroundRenderer(void (* renderer) (void))
+{
+	m_backgroundRenderer = renderer;
+}
+
+
 short CVideoSubsystem::MakeLight(unsigned long ambient, unsigned long diffuse) // returns an id to a useable light
 {
 	return 0;
@@ -669,59 +1336,34 @@ void CVideoSubsystem::SetLightDiffuse(short id, unsigned long diffuse)
 }
 
 
-void CVideoSubsystem::SetUpProjection2d()
+void CVideoSubsystem::PushProjection2d()
 {
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();										// Store The Projection Matrix
 	glLoadIdentity();
-	gluOrtho2D( 0, settings.getSw(), 0, settings.getSh() );
-
+	
+	gluOrtho2D( 0, viewportContextStack.back().virtualPixelWidth, 0, viewportContextStack.back().virtualPixelHeight );
+	
 	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
 	glPushMatrix();										// Store The Modelview Matrix
 	glLoadIdentity();									// Reset The Modelview Matrix
-
-	/*if(usecam)
-	{	
-		glTranslatef(Video.settings.getSw()/2, Video.settings.getSh()/2, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
-		glRotatef(-Video.camera.getAngle().z, 0, 0, 1);
-
-		glTranslatef(pivot.camcoords(Video.camera).x, pivot.camcoords(Video.camera).y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
-		position.x-=pivot.x;//Video.camPosition.x;
-		position.y-=pivot.y;//Video.camPosition.y;
-		glRotatef(rotateangle, 0, 0, 1);
-	}
-	else
-	{*/
-	/*	glTranslatef(pivot.x, pivot.y, 0);
-		position.x-=pivot.x;
-		position.y-=pivot.y;
-		glRotatef(rotateangle, 0, 0, 1);*/
-	//}
 }
 
-void CVideoSubsystem::SetUpProjection3d()
+void CVideoSubsystem::PushProjection3d()
 {
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
 
 	if(Video.settings.getSh())
-		gluPerspective(85.0f, (double)settings.getSw() / (double)settings.getSh(), 2.0f, 1000.0f);
+		gluPerspective(45.0f, (float)Video.TopViewportContext().area.getWidth() / (float)Video.TopViewportContext().area.getHeight(), 2.0f, 5000000.0f);
 
 	glMatrixMode(GL_MODELVIEW);
 	glPushMatrix();
 	glLoadIdentity();
-
-	/*glRotatef(-camera.getAngle().x,1, 0, 0);
-	glRotatef(-camera.getAngle().y,0, 1, 0);
-	glRotatef(-camera.getAngle().z,0, 0, 1);
-	glTranslatef(-camera.getPosition().x, -camera.getPosition().y, -camera.getPosition().z);*/
-
-	glEnable(GL_CULL_FACE);
-	glEnable(GL_DEPTH_TEST);
 }
 
-void CVideoSubsystem::ResetProjection()
+void CVideoSubsystem::PopProjection()
 {
 	glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
 	glPopMatrix();										// Restore The Old Projection Matrix
@@ -729,7 +1371,76 @@ void CVideoSubsystem::ResetProjection()
 	glPopMatrix();										// Restore The Old Projection Matrix
 }
 
-void CVideoSubsystem::SetViewport()
+void CVideoSubsystem::PushViewportContext(CViewportContext context)
+{
+	viewportContextStack.push_back(context);
+	SetGLViewport();
+}
+CViewportContext CVideoSubsystem::PopViewportContext()
+{
+	CViewportContext result = viewportContextStack.back();
+	viewportContextStack.pop_back();
+	if(!viewportContextStack.size())
+	{
+		ResetViewportContexts();
+	}
+	else
+	{
+		SetGLViewport();
+	}
+	return result;
+}
+CViewportContext CVideoSubsystem::TopViewportContext()
+{
+	return viewportContextStack.back();
+}
+void CVideoSubsystem::ResetViewportContexts()
+{
+	while(viewportContextStack.size())
+	{
+		viewportContextStack.pop_back();
+	}
+	CViewportContext baseContext;
+	baseContext.area.leftx = 0;
+	baseContext.virtualPixelWidth = baseContext.area.rightx = settings.getSw();
+	baseContext.area.bottomy = 0;
+	baseContext.virtualPixelHeight = baseContext.area.topy = settings.getSh();
+	baseContext.viewportContextType = CViewportContext::independent;
+	PushViewportContext(baseContext);
+	SetGLViewport();
+}
+
+void CVideoSubsystem::RenderText(string font, string text, v3d position, CColor color, CRectangle clippingRegion, bool clip)
+{
+	PushProjection2d();
+
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_LIGHTING);
+
+	glDisable(GL_TEXTURE_2D);
+
+	if(clip)
+	{
+		glScissor(clippingRegion.leftx, clippingRegion.bottomy, clippingRegion.rightx-clippingRegion.leftx, clippingRegion.topy-clippingRegion.bottomy);
+		glEnable(GL_SCISSOR_TEST);
+	}
+
+	glColor3f(color.getRFloat(), color.getGFloat(), color.getBFloat());
+
+	glRasterPos2f(position.x, position.y);
+
+	FTFont* ftglfont = FTGLFontManager::Instance().GetFont( font.c_str(), 12);
+	if(ftglfont)
+		ftglfont->Render( text.c_str() );
+
+	glDisable(GL_SCISSOR_TEST);
+
+	PopProjection();
+}
+
+
+/*void CVideoSubsystem::SetViewport()
 {
 	CViewport defaultViewport;
 	defaultViewport.area.leftx = 0;
@@ -737,47 +1448,263 @@ void CVideoSubsystem::SetViewport()
 	defaultViewport.area.topy = settings.getSh();
 	defaultViewport.area.bottomy = 0;
 	defaultViewport.SetUpViewport();
-}
+}*/
 
-void CVideoSubsystem::SetViewport(CViewport viewport)
+/*void CVideoSubsystem::SetViewport(CViewport viewport)
 {
 	viewport.SetUpViewport();
+}*/
+
+void CVideoSubsystem::DrawButton(CRectangle area, CColor color, string caption, bool down)
+{
+	CColor brightColor = color + CColor(0.2f, 0.2f, 0.2f, 0.0f);
+	CColor darkColor = color - CColor(0.2f, 0.2f, 0.2f, 0.0f);
+
+	if(down) // swap the colors around
+	{
+		CColor temp;
+		temp = brightColor;
+		brightColor = darkColor;
+		darkColor = temp;
+	}
+
+//	if(gradient)
+		DrawRectangleGradient(area.getLowerLeft(), area.getUpperRight(), color);
+//	else
+//		DrawRectangle(area.getLowerLeft(), area.getUpperRight(), color);
+
+	DrawLine(area.getLowerLeft(), area.getLowerRight(),  darkColor.getPixel(), false);
+	DrawLine(area.getUpperLeft(), area.getUpperRight(), brightColor.getPixel(), false);
+	DrawLine(area.getLowerLeft(), area.getUpperLeft(), brightColor.getPixel(), false);
+	DrawLine(area.getLowerRight(), area.getUpperRight(), darkColor.getPixel(), false);
+
+	float xcenter = area.leftx + (area.rightx-area.leftx)/2;
+	float captionWidth = vcout.getAdvance(caption);
+
+	float ycenter = area.bottomy + (area.topy-area.bottomy)/2 + vcout.getHeight()/2 - vcout.getAscender();
+	float ascDescDifference = -vcout.getAscender() - vcout.getDescender();
+
+	vcout.setPos(v3d( xcenter - captionWidth/2, ycenter));
+	vcout.setColor(CColor(0.75f, 0.75f, 0.75f));
+	vcout.setBounds(area);
+	vcout.clipToBounds = true;
+	vcout << caption;
+	vcout.clipToBounds = false;
 }
 
-void CVideoSubsystem::DrawProgressBar(CRectangle area, float percent, CColor barColor1, CColor barColor2, CColor backgroundColor)
+void CVideoSubsystem::DrawProgressBar(CRectangle area, float percent, CColor barColor, CColor backgroundColor)
 {
-	SetUpProjection2d();
+	PushProjection2d();
+
+	CColor barColor2 = barColor - CColor(0.2f, 0.2f, 0.2f, 0.0f);
 
 	CRectangle barArea;
 	barArea = area;
 	barArea.leftx += 1;
 	barArea.topy -= 1;
 	barArea.bottomy += 1;
-	barArea.rightx = area.leftx + (area.rightx-area.leftx)*percent - 1;
+	barArea.rightx = area.leftx + 2 + (area.rightx-area.leftx-4)*percent;
 
 	// background
-	Video.BlitRect(area.getLowerLeft(), area.getUpperRight(), backgroundColor, backgroundColor);
-	Video.DrawLine(area.getLowerLeft(), area.getLowerRight(), _RGB32BIT(192, 192, 192), false);
-	Video.DrawLine(area.getUpperLeft(), area.getUpperRight(), _RGB32BIT(64, 64, 64), false);
-	Video.DrawLine(area.getLowerLeft(), area.getUpperLeft(), _RGB32BIT(64, 64, 64), false);
-	Video.DrawLine(area.getLowerRight(), area.getUpperRight(), _RGB32BIT(192, 192, 192), false);
+	
+	DrawRectangle(area.getLowerLeft(), area.getUpperRight(), backgroundColor);
+	DrawLine(area.getLowerLeft(), area.getLowerRight(), _RGB32BIT(192, 192, 192), false);
+	DrawLine(area.getUpperLeft(), area.getUpperRight(), _RGB32BIT(64, 64, 64), false);
+	DrawLine(area.getLowerLeft(), area.getUpperLeft(), _RGB32BIT(64, 64, 64), false);
+	DrawLine(area.getLowerRight(), area.getUpperRight(), _RGB32BIT(192, 192, 192), false);
 	
 	// progress bar
-	Video.BlitRect(barArea.getLowerLeft(), barArea.getUpperRight(), barColor1, barColor2);
-	Video.DrawLine(barArea.getLowerLeft(), barArea.getLowerRight(), _RGB32BIT(64, 64, 64), false);
-	Video.DrawLine(barArea.getUpperLeft(), barArea.getUpperRight(), _RGB32BIT(192, 192, 192), false);
-	Video.DrawLine(barArea.getLowerLeft(), barArea.getUpperLeft(), _RGB32BIT(192, 192, 192), false);
-	Video.DrawLine(barArea.getLowerRight(), barArea.getUpperRight(), _RGB32BIT(64, 64, 64), false);
 	
-	Video.vcout.setPos(v3d( area.leftx + (area.rightx-area.leftx)/2, area.bottomy + (area.topy-area.bottomy)/2 - 4));
+	DrawRectangleGradient(barArea.getLowerLeft(), barArea.getUpperRight(), barColor);
+	DrawLine(barArea.getLowerLeft(), barArea.getLowerRight(),  barColor2.getPixel()/*_RGB32BIT(64, 64, 64)*/, false);
+	DrawLine(barArea.getUpperLeft(), barArea.getUpperRight(), barColor.getPixel()/*_RGB32BIT(192, 192, 192)*/, false);
+	DrawLine(barArea.getLowerLeft(), barArea.getUpperLeft(), barColor.getPixel()/*_RGB32BIT(192, 192, 192)*/, false);
+	DrawLine(barArea.getLowerRight(), barArea.getUpperRight(), barColor2.getPixel()/*_RGB32BIT(64, 64, 64)*/, false);
 	
 	string temp = M_ftoa(percent*100) + "%";
-	Video.vcout.setColor(CColor(1.0f, 1.0f, 1.0f, 1.0f));
-	Video.vcout << temp;
+	vcout.setPos(v3d( area.leftx + (area.rightx-area.leftx)/2, area.bottomy + (area.topy-area.bottomy)/2 - 4));
+	vcout.setColor(CColor(1.0f, 1.0f, 1.0f, 1.0f));
+	vcout.setBounds(area);
+	vcout.clipToBounds = true;
+	vcout << temp;
+	vcout.clipToBounds = false;
 	
-	ResetProjection();
+	PopProjection();
 }
 
+void CVideoSubsystem::DrawSlider(CRectangle area, float percent)
+{
+	CRectangle trackArea = area;
+	float middley = (area.topy-area.bottomy)/2;
+	trackArea.topy = middley + 2 + area.bottomy;
+	trackArea.bottomy = middley - 2 + area.bottomy;
+
+	CRectangle sliderArea(area.leftx-2.5, area.leftx + 2.5, area.bottomy, area.topy);
+	sliderArea.leftx += percent*(area.rightx-area.leftx);
+	sliderArea.rightx += percent*(area.rightx-area.leftx);
+
+	DrawRectangle(trackArea.getLowerLeft(), trackArea.getUpperRight(), CColor(0.75f, 0.75f, 0.75f));
+	DrawLine(trackArea.getLowerLeft(), trackArea.getLowerRight(), _RGB32BIT(192, 192, 192), false);
+	DrawLine(trackArea.getUpperLeft(), trackArea.getUpperRight(), _RGB32BIT(64, 64, 64), false);
+	DrawLine(trackArea.getLowerLeft(), trackArea.getUpperLeft(), _RGB32BIT(64, 64, 64), false);
+	DrawLine(trackArea.getLowerRight(), trackArea.getUpperRight(), _RGB32BIT(192, 192, 192), false);
+
+	DrawRectangle(sliderArea.getLowerLeft(), sliderArea.getUpperRight(), CColor(0.75f, 0.75f, 0.75f));
+	DrawLine(sliderArea.getLowerLeft(), sliderArea.getLowerRight(), _RGB32BIT(64, 64, 64), false);
+	DrawLine(sliderArea.getUpperLeft(), sliderArea.getUpperRight(), _RGB32BIT(192, 192, 192), false);
+	DrawLine(sliderArea.getLowerLeft(), sliderArea.getUpperLeft(), _RGB32BIT(192, 192, 192), false);
+	DrawLine(sliderArea.getLowerRight(), sliderArea.getUpperRight(), _RGB32BIT(64, 64, 64), false);
+
+}
+
+
+void CVideoSubsystem::DrawTextField(CRectangle area, CColor textColor, CColor backgroundColor, CColor borderColor, string text)
+{
+	DrawRectangle(area.getLowerLeft(), area.getUpperRight(), backgroundColor);
+	DrawLine(area.getLowerLeft(), area.getLowerRight(), _RGB32BIT(192, 192, 192), false);
+	DrawLine(area.getUpperLeft(), area.getUpperRight(), _RGB32BIT(64, 64, 64), false);
+	DrawLine(area.getLowerLeft(), area.getUpperLeft(), _RGB32BIT(64, 64, 64), false);
+	DrawLine(area.getLowerRight(), area.getUpperRight(), _RGB32BIT(192, 192, 192), false);
+	
+	vcout.setBounds(area);
+	vcout.clipToBounds = true;
+	vcout.setPos(v3d( area.leftx+1, area.topy - vcout.getAscender()));
+	vcout.setColor(textColor);
+	vcout << text;
+	vcout.clipToBounds = false;
+}
+
+void CVideoSubsystem::DrawTextStatic(CRectangle area, CColor textColor, string text)
+{
+	vcout.setBounds(area);
+	vcout.clipToBounds = true;
+	vcout.setPos(v3d( area.leftx+1, area.topy - vcout.getAscender()));
+	vcout.setColor(textColor);
+	vcout << text;
+	vcout.clipToBounds = false;
+}
+
+void CVideoSubsystem::DrawWindow(CRectangle area, CColor backgroundColor, bool gradient, bool titleBar, CColor titleBarColor, string titleBarCaption)
+{
+	CColor brightColor = backgroundColor + CColor(0.2f, 0.2f, 0.2f, 0.0f);
+	CColor darkColor = backgroundColor - CColor(0.2f, 0.2f, 0.2f, 0.0f);
+
+	PushProjection2d();
+	
+	glPushAttrib(GL_ENABLE_BIT);
+
+	glDisable(GL_LIGHTING);
+	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
+	glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+	glDisable(GL_TEXTURE_2D);
+
+	glBegin(GL_QUADS);		
+		v3d p1 = area.getLowerLeft();
+		v3d p2 = area.getUpperRight();
+		glColor4f( backgroundColor.getRFloat(), backgroundColor.getGFloat(), backgroundColor.getBFloat(), backgroundColor.getAFloat() );
+		glVertex2f(p1.x,p1.y); //0,0
+
+		if(gradient)
+			glColor4f( darkColor.getRFloat(), darkColor.getGFloat(), darkColor.getBFloat(), darkColor.getAFloat() );
+		glVertex2f(p1.x,p2.y); // 0,1
+
+		//glColor4f( darkColor.getRFloat(), darkColor.getGFloat(), darkColor.getBFloat(), darkColor.getAFloat() );
+		glVertex2f(p2.x,p2.y);		// 1,1
+
+		if(gradient)
+			glColor4f( backgroundColor.getRFloat(), backgroundColor.getGFloat(), backgroundColor.getBFloat(), backgroundColor.getAFloat() );
+		glVertex2f(p2.x,p1.y);	// 1,0
+		glColor3f(1.0f, 1.0f, 1.0f);
+	glEnd();
+
+	glBegin(GL_LINES);
+		v3d start = area.getLowerLeft();
+		v3d end = area.getLowerRight();
+		glColor3f( darkColor.getRFloat(), darkColor.getGFloat(), darkColor.getBFloat());
+		glVertex3f(start.x,start.y,start.z); 
+		glVertex3f(end.x,end.y,end.z); 
+
+		start = area.getUpperLeft();
+		end = area.getUpperRight();
+		glColor3f( brightColor.getRFloat(), brightColor.getGFloat(), brightColor.getBFloat());
+		glVertex3f(start.x,start.y,start.z); 
+		glVertex3f(end.x,end.y,end.z); 
+
+		start = area.getLowerLeft();
+		end = area.getUpperLeft();
+		glColor3f( brightColor.getRFloat(), brightColor.getGFloat(), brightColor.getBFloat());
+		glVertex3f(start.x,start.y,start.z); 
+		glVertex3f(end.x,end.y,end.z); 
+
+		start = area.getLowerRight();
+		end = area.getUpperRight();
+		glColor3f( darkColor.getRFloat(), darkColor.getGFloat(), darkColor.getBFloat());
+		glVertex3f(start.x,start.y,start.z); 
+		glVertex3f(end.x,end.y,end.z); 
+
+		glColor3f( 1.0, 1.0, 1.0 );
+	glEnd();
+
+	glPopAttrib();
+	
+	PopProjection();
+
+	if(titleBar)
+	{
+		brightColor = CColor(192, 192, 192);//;titleBarColor + CColor(0.2f, 0.2f, 0.2f, 0.0f);
+		darkColor = CColor(64, 64, 64);//;titleBarColor - CColor(0.2f, 0.2f, 0.2f, 0.0f);
+		float titleBarHeight = vcout.getHeight();
+		CRectangle titleBarArea(area.leftx, area.rightx, area.topy-titleBarHeight, area.topy);
+
+		DrawRectangle(titleBarArea.getLowerLeft(), titleBarArea.getUpperRight(), titleBarColor);
+		DrawLine(titleBarArea.getLowerLeft(), titleBarArea.getLowerRight(),  darkColor.getPixel(), false);
+		DrawLine(titleBarArea.getUpperLeft(), titleBarArea.getUpperRight(), brightColor.getPixel(), false);
+		DrawLine(titleBarArea.getLowerLeft(), titleBarArea.getUpperLeft(), brightColor.getPixel(), false);
+		DrawLine(titleBarArea.getLowerRight(), titleBarArea.getUpperRight(), darkColor.getPixel(), false);
+
+		vcout.setPos(area.getUpperLeft() + v3d(5,-vcout.getAscender()));
+		vcout.setColor(CColor(0.2f, 0.2f, 0.2f));
+		vcout.setBounds(titleBarArea);
+		vcout.clipToBounds = true;
+		vcout << titleBarCaption;
+		vcout.clipToBounds = false;
+	}
+}
+
+
+
+void CVideoSubsystem::SetGLViewport()
+{
+	CViewportContext context;
+	if(viewportContextStack.size())
+	{
+		context = TopViewportContext();
+		if(context.viewportContextType == CViewportContext::additive) // add up all the contexts below it
+		{
+			vector<CViewportContext>::iterator it = viewportContextStack.end();
+			it--; // -= 2???
+			for(; it != viewportContextStack.begin(); it--)
+			{
+				context.area.leftx += it->area.leftx;
+				context.area.rightx += it->area.leftx;
+				context.area.bottomy += it->area.bottomy;
+				context.area.topy += it->area.bottomy;
+				if(it->viewportContextType != CViewportContext::additive)
+					break;
+			}
+		}
+	}
+	else
+	{
+		ccout << "Context type is not additive SHOULD NOT HAPPEN ";
+		context.area.leftx = 0;
+		context.area.rightx = settings.getSw();
+		context.area.bottomy = 0;
+		context.area.topy = settings.getSh();
+	}
+	glViewport(context.area.leftx, context.area.bottomy, context.area.rightx-context.area.leftx, context.area.topy-context.area.bottomy);
+}	
 
 /*
 private:
@@ -791,15 +1718,16 @@ private:
 
 vid_VCout::vid_VCout()
 {
-	font = new vidw_Font;
+	clipToBounds = false;
+//	font = new vidw_Font;
 	drawPosition = 0;
 	drawColor.setColors(1.0f, 1.0f, 1.0f);
 }
 
 vid_VCout::~vid_VCout()
 {
-	if(font)
-		delete font;
+//	if(font)
+//		delete font;
 }
 
 vid_VCout& vid_VCout::operator << (string rhs)
@@ -825,7 +1753,7 @@ vid_VCout& vid_VCout::operator << (unsigned char rhs)
 	print(cstring);
 	return *this;
 }
-vid_VCout& vid_VCout::operator << (double rhs)
+vid_VCout& vid_VCout::operator << (float rhs)
 {
 	print(M_ftoa(rhs));
 	return *this;
@@ -863,18 +1791,67 @@ vid_VCout& vid_VCout::operator << (bool rhs)
 
 vid_VCout& vid_VCout::setFont(const string& fontName)
 {
-	font->SetFont(fontName);
+	fontname = fontName;
 	return *this;
 }
-vid_VCout& vid_VCout::setWeight(const unsigned short weight)
+
+vid_VCout& vid_VCout::setBounds(CRectangle newBounds)
 {
-	font->SetWeight(weight);
+	bounds = newBounds;
 	return *this;
 }
-vid_VCout& vid_VCout::setHeight(const unsigned short height)
+vid_VCout& vid_VCout::setSize(const unsigned short newSize)
 {
-	font->SetHeight(height);
+	size = newSize;
 	return *this;
+}
+float vid_VCout::getHeight()
+{
+	FTFont* font = FTGLFontManager::Instance().GetFont(fontname.c_str(), size);
+	if(font)
+	{
+		return font->LineHeight();
+	}
+	else
+	{
+		return 0.0f;
+	}
+}
+float vid_VCout::getAscender()
+{
+	FTFont* font = FTGLFontManager::Instance().GetFont(fontname.c_str(), size);
+	if(font)
+	{
+		return font->Ascender();
+	}
+	else
+	{
+		return 0.0f;
+	}
+}
+float vid_VCout::getDescender()
+{
+	FTFont* font = FTGLFontManager::Instance().GetFont(fontname.c_str(), size);
+	if(font)
+	{
+		return font->Descender();
+	}
+	else
+	{
+		return 0.0f;
+	}
+}
+float vid_VCout::getAdvance(string text)
+{
+	FTFont* font = FTGLFontManager::Instance().GetFont(fontname.c_str(), size);
+	if(font)
+	{
+		return font->Advance(text.c_str());
+	}
+	else
+	{
+		return 0.0f;
+	}
 }
 
 vid_VCout& vid_VCout::setPos(v3d position)
@@ -899,7 +1876,121 @@ vid_VCout& vid_VCout::setColor(CColor color)
 
 void vid_VCout::print(string text)
 {
-	VIDW_PutText(text, drawPosition, drawColor, *font);
+
+	//if(clipToBounds)
+//	Video.DrawRectangle(bounds.getUpperRight(), bounds.getLowerLeft(), CColor(1.f,0.f,0.f,.25f));
+	Video.PushProjection2d();
+
+	glPushAttrib(GL_ENABLE_BIT);
+
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_LIGHTING);
+
+	glDisable(GL_TEXTURE_2D);
+
+	glColor3f(drawColor.getRFloat(), drawColor.getGFloat(), drawColor.getBFloat());	
+	
+	string currentLine;
+	v3d currentDrawPosition = drawPosition;
+	float ypitch(12);
+
+	FTFont* font = FTGLFontManager::Instance().GetFont(fontname.c_str(), size);
+	if(font)
+	{
+		ypitch = font->LineHeight();
+	}
+	else
+	{
+		return;
+	}
+	if(clipToBounds)
+	{
+		/*float plane0[4] = {0.0, 1.0, 0.0, -bounds.bottomy}; // bottom clipping plane
+		float plane1[4] = {0.0, -1.0, 0.0, bounds.topy}; // top clipping plane
+		float plane2[4] = {1.0, 0.0, 0.0, -bounds.leftx}; // left clipping plane
+		float plane3[4] = {-1.0, 0.0, 0.0, bounds.rightx}; // right clipping plane
+
+		glClipPlane(GL_CLIP_PLANE0, plane0);
+		glEnable(GL_CLIP_PLANE0);
+		glClipPlane(GL_CLIP_PLANE1, plane1);
+		glEnable(GL_CLIP_PLANE1);
+		glClipPlane(GL_CLIP_PLANE2, plane2);
+		glEnable(GL_CLIP_PLANE2);
+		glClipPlane(GL_CLIP_PLANE3, plane3);
+		glEnable(GL_CLIP_PLANE3);*/
+
+		glScissor(bounds.leftx, bounds.bottomy, bounds.rightx-bounds.leftx, bounds.topy-bounds.bottomy);
+		glEnable(GL_SCISSOR_TEST);
+	}
+		
+	// for the texture font
+	glEnable( GL_TEXTURE_2D);
+	glDisable( GL_DEPTH_TEST);
+	//glDisable(GL_BLEND);
+	//setUpLighting();
+	glNormal3f( 0.0, 0.0, 1.0);
+
+	//glTranslatef(currentDrawPosition.x, currentDrawPosition.y, 0.0f);
+	int offsetr = -1;
+	int offsetl = 0;
+	//for(int i = 0; i < text.size(); i++)
+	bool done = false;
+	glTranslatef(currentDrawPosition.x, currentDrawPosition.y/*+font->LineHeight()*/, 0.0f);
+	while(!done)
+	{
+		offsetl = offsetr+1;
+		offsetr = text.find('\n', offsetr+1);
+		if(offsetr == -1)
+		{
+			done = true;
+			offsetr = text.size();
+		}
+		glRasterPos2f(currentDrawPosition.x, currentDrawPosition.y);
+		if(offsetl != offsetr)
+		{
+			string substring = text.substr(offsetl, offsetr-offsetl);
+			font->Render(text.substr(offsetl, offsetr-offsetl).c_str());
+			glTranslatef(-font->Advance(text.substr(offsetl, offsetr-offsetl-1).c_str()), -ypitch, 0.0f);
+			currentDrawPosition -= v3d(0, ypitch);
+		}
+		else
+		{
+			glTranslatef(0, -ypitch, 0.0f);
+			currentDrawPosition -= v3d(0, ypitch);
+		}
+		/*
+		if(text[i] == '\n')
+		{
+			glRasterPos2f(currentDrawPosition.x, currentDrawPosition.y);
+			//glTranslatef(0.0f, -ypitch, 0.0f);
+			font->Render(currentLine.c_str());
+			currentDrawPosition -= v3d(0, ypitch);
+			currentLine = "";
+		}
+		else
+		{
+			currentLine += text[i];
+		}*/
+	}
+	/*if(currentLine.size())
+	{
+		glRasterPos2f(currentDrawPosition.x, currentDrawPosition.y);
+		//glTranslatef(currentDrawPosition.x, currentDrawPosition.y, 0.0f);
+		font->Render(currentLine.c_str());
+	}*/
+
+
+	/*glDisable(GL_CLIP_PLANE0);
+	glDisable(GL_CLIP_PLANE1);
+	glDisable(GL_CLIP_PLANE2);
+	glDisable(GL_CLIP_PLANE3);*/
+
+	glDisable(GL_SCISSOR_TEST);
+
+	glPopAttrib();
+
+	Video.PopProjection();
 }
 
 
@@ -910,7 +2001,8 @@ sh(0),
 swScaled(1024),
 shScaled(768),
 zoom(1.0),
-fullscreen(true)
+fullscreen(true),
+modelsUseDisplayLists(false)
 {
 }
 
@@ -1250,7 +2342,7 @@ void vid_SceneGraph::draw(vid_SceneObject* subRoot, DrawingModes mode, short lay
 		{
 			if(clipToCamera)
 			{
-				float distanceSq = subRoot->collapseTransforms().getTranslation().distance(Video.camera.getPosition());
+				float distanceSq = subRoot->collapseTransforms().getTranslation().distance(Video.camera.GetTransformation().getTranslation());
 				distanceSq *= distanceSq; // square it
 				float radiusSq = (float)(Video.settings.getSh()*Video.settings.getSh()+Video.settings.getSw()*Video.settings.getSw()); /*400*//*714*/
 				if(distanceSq < radiusSq)
@@ -1831,15 +2923,6 @@ void vid_Camera::update()
 	ccout << "camera view: " << view << " camera position: " << position << newl;
 	ccout << "positoin matrix: " << newl << matrix4x4::mtfTranslate(position) << newl;
 	ccout << "rotation matrix: " << newl << matrix4x4::rotationFromQuaternion(viewQuaternion) << newl;*/
-
-	vid_SceneObject* targetObject(0);
-	if(targetType == uid)
-	{
-		if(targetObject = aliases.getObject(targetUid))
-		{
-			destination = targetObject->collapseTransforms();
-		}
-	}
 	
 	switch(transition)
 	{
@@ -1851,17 +2934,17 @@ void vid_Camera::update()
 		break;
 	case average:
 		{
+			v3d position = transform.getTranslation();
+			v3d targetPosition = destination.getTranslation();
 			transform = destination;
+			transform.setTranslation(position + (targetPosition-position)*sys_frameTime*6);
 			Video.settings.setZoom(destzoom);
-
 		}
 		break;
 	case linear:
 		{
 			transform = destination;
 			Video.settings.setZoom(destzoom);
-
-
 		}
 		break;
 	default:
@@ -1923,6 +3006,26 @@ const v3d vid_Camera::getDestpositionAngleFromOrigin()
 	}
 
 	return result;
+}
+
+v3d vid_Camera::worldToCameraSpace(const v3d& rhs)
+{
+	return transform.getTransform() * (rhs - transform.getTranslation());
+}
+
+void vid_Camera::lookAt(v3d lookAt)
+{
+	v3d cameraPosition(destination.getTranslation());
+	v3d cameraVector = cameraPosition - lookAt;
+	v3d rotation = v3d( 
+																	-180/pi * atan( cameraVector.y/sqrt(cameraVector.x*cameraVector.x + cameraVector.z*cameraVector.z)),
+																	((cameraVector.x < 0) ? -1 : 1) * 90 - 180/pi *atan( cameraVector.z/cameraVector.x ),
+																	0 );
+	destination = TranslationMatrix(cameraPosition) * RotationMatrix( v3d( 
+																	-180/pi * atan( cameraVector.y/sqrt(cameraVector.x*cameraVector.x + cameraVector.z*cameraVector.z)),
+																	((cameraVector.x < 0) ? -1 : 1) * 90 - 180/pi *atan( cameraVector.z/cameraVector.x ),
+																	0 ));
+//	destination = transform;
 }
 
 

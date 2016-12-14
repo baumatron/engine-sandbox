@@ -1,8 +1,8 @@
 #include <string>
-#include "CInputSubsystem.h"
-#include "in_event.h"
+//#include "in_event.h"
 #include "m_misc.h"
 #include "math_main.h"
+#include "CInputSubsystem.h"
 
 using namespace std;
 
@@ -73,7 +73,7 @@ public:
 	con_Cout& operator<<(const char* rhs);	
 	con_Cout& operator<<(char rhs);
 	con_Cout& operator<<(unsigned char rhs);
-	con_Cout& operator<<(double rhs);
+	con_Cout& operator<<(float rhs);
 	con_Cout& operator<<(int rhs);
 	con_Cout& operator<<(long int rhs);
 	con_Cout& operator<<(unsigned long int rhs);
