@@ -1,3 +1,8 @@
+/* AUTHOR: Brian Baumhover
+ *   DATE: 2006.01.15
+ *
+ */
+
 #ifndef CCOLOR_H
 #define CCOLOR_H
 

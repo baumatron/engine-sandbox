@@ -1,89 +1,57 @@
 #ifndef CFONTMANAGER_H
 #define CFONTMANAGER_H
 
+#ifdef WIN32
+
+#pragma comment (lib, "libfreetype.lib")
+#ifdef _DEBUG
+#pragma comment (lib, "ftgl_static_MTD_d.lib") // should be for debug build only
+#else
+#pragma comment (lib, "ftgl_static_MTD.lib") // should be for debug build only
+#endif
+
+#else
+// LINUX
+
+#endif
+
+#include "CSingleton.h"
+
 #include    <map>
 #include    <string>
-#include    "FTGLBitmapFont.h"
-#include    "FTGLTextureFont.h"
+//#include    <FTGLBitmapFont.h>
+//#include <FTFont.h>
+#include <glew.h>
+#include    <FTGLTextureFont.h>
+
 
 using namespace std;
 
 typedef map< string, FTFont*> FontList;
 typedef FontList::const_iterator FontIter;
 
-class FTGLFontManager
+class FTGLFontManager: public CSingleton<FTGLFontManager>
 {
     public:
         // NOTE
         // This is shown here for brevity. The implementation should be in the source
         // file otherwise your compiler may inline the function resulting in 
         // multiple instances of FTGLFontManager
-        static FTGLFontManager& Instance()
-        {
-            static FTGLFontManager tm;
-            return tm;
-        }
+		friend class CSingleton<FTGLFontManager>;
         
-        ~FTGLFontManager()
-        {
-            FontIter font;
-            for( font = fonts.begin(); font != fonts.end(); font++)
-            {
-                delete (*font).second;
-            }
-    
-            fonts.clear();
-        }
+		~FTGLFontManager();
 
+		void Initialize();
+		void Shutdown();
         
-        FTFont* GetFont( const char *filename, int size)
-        {
-            char buf[256];
-            sprintf(buf, "%s%i", filename, size);
-            string fontKey = string(buf);
-            
-            FontIter result = fonts.find( fontKey);
-            if( result != fonts.end())
-            {
-//                LOGMSG( "Found font %s in list", filename);
-                return result->second;
-            }
-        
- 
- //           FTFont* font = new FTGLBitmapFont(filename);
-            FTFont* font = new FTGLTextureFont(filename);
-           
-            if( font->Error())
-            {
-                //LOGERROR( "Font %s failed to open", fullname.c_str());
-                delete font;
-                return NULL;
-            }
-            
-            if( !font->FaceSize( size))
-            {
-                //LOGERROR( "Font %s failed to set size %i", filename, size);
-                delete font;
-                return NULL;
-            }
-        
-            fonts[fontKey] = font;
-            
-            return font;
-        
-        }
+        FTFont* GetFont( const char *filename, int size);
     
-        static string ClipText(string text, FTFont* font, float length)
-		{
-			while(font->Advance(text.c_str()) > length)
-				text = text.substr(0, text.size()-1);
-			return text;
-		}
+        static string ClipText(string text, FTFont* font, float length);
     private:
         // Hide these 'cause this is a singleton.
-        FTGLFontManager(){}
-        FTGLFontManager( const FTGLFontManager&){};
-        FTGLFontManager& operator = ( const FTGLFontManager&){ return *this;};
+        FTGLFontManager();
+        FTGLFontManager( const FTGLFontManager&);
+        FTGLFontManager& operator = ( const FTGLFontManager&);
         
         // container for fonts
         FontList fonts;
