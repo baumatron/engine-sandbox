@@ -18,7 +18,7 @@ public:
 	virtual bool Initialize();
 	virtual bool Shutdown();
 
-	virtual CRouterReturnCode EventReceiver(CEvent& event);
+	virtual CRouterReturnCode EventReceiver(CRouterEvent& event);
 
 ////////////////////////
 	short LoadSound(string filename, bool stream);

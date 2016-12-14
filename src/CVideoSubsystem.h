@@ -1,6 +1,21 @@
 #ifndef CVIDEOSUBSYSTEM_H
 #define CVIDEOSUBSYSTEM_H
 
+#ifdef WIN32
+#include <windows.h>								// Header File For Windows
+#endif
+
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <GL/glut.h>
+
+#ifdef WIN32
+#include <SDL.h>								// Header File For Windows
+#else
+#include <SDL/SDL.h>
+#endif
+
+
 typedef unsigned long VideoResourceID;
 
 #include "ISubsystem.h"
@@ -240,7 +255,78 @@ private:
 	v3d position;*/
 };
 
-
+class CViewport
+{
+public:
+	CViewport(){}
+	~CViewport(){}
+	
+	void SetUpViewport()
+	{
+		glViewport(area.leftx, area.bottomy, area.rightx, area.topy);
+/*		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();
+		glLoadIdentity();
+	
+		if( (area.leftx-area.rightx) != 0 )
+			gluPerspective(85.0f, (area.leftx-area.rightx) / (area.topy-area.bottomy), 2.0f, 1000.0f);
+	
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+	
+		glRotatef(-camera.getAngle().x,1, 0, 0);
+		glRotatef(-camera.getAngle().y,0, 1, 0);
+		glRotatef(-camera.getAngle().z,0, 0, 1);
+		glTranslatef(-camera.getPosition().x, -camera.getPosition().y, -camera.getPosition().z);
+	
+		glEnable(GL_CULL_FACE);
+		glEnable(GL_DEPTH_TEST);*/
+	}
+	
+	void SetUpGLViewport2d()
+	{
+		glViewport(area.leftx, area.bottomy, area.rightx, area.topy);
+/*		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();										// Store The Projection Matrix
+		glLoadIdentity();
+		gluOrtho2D( 0, Video.settings.getSw(), 0, Video.settings.getSh() );
+	
+		glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+		glPushMatrix();										// Store The Modelview Matrix
+		glLoadIdentity();									// Reset The Modelview Matrix
+	
+		if(usecam)
+		{	
+			glTranslatef(Video.settings.getSw()/2, Video.settings.getSh()/2, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
+			glRotatef(-camera.getAngle().z, 0, 0, 1);
+	
+			glTranslatef(pivot.camcoords(camera).x, pivot.camcoords(camera).y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
+			position.x-=pivot.x;//Video.camPosition.x;
+			position.y-=pivot.y;//Video.camPosition.y;
+			glRotatef(rotateangle, 0, 0, 1);
+		}
+		else
+		{
+			glTranslatef(pivot.x, pivot.y, 0);
+			position.x-=pivot.x;
+			position.y-=pivot.y;
+			glRotatef(rotateangle, 0, 0, 1);
+		}*/
+	}
+	
+/*	void ResetGLViewport()
+	{
+		glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
+		glPopMatrix();										// Restore The Old Projection Matrix
+		glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+		glPopMatrix();										// Restore The Old Projection Matrix
+	}*/
+//private:
+	CRectangle area;
+	//vid_Camera camera;
+	//float xUnitCount, yUnitCount;
+};
 
 class vid_SceneGraph
 {
@@ -402,7 +488,7 @@ public:
 	virtual bool Shutdown();
 	virtual void Think();
 
-	virtual CRouterReturnCode EventReceiver(CEvent& event);
+	virtual CRouterReturnCode EventReceiver(CRouterEvent& event);
 
 ////////////////////////
 
@@ -424,7 +510,7 @@ public:
 	void BlitBitmap(unsigned long* data,					v3d position, v3d size, float rotateangle = 0, v3d pivot = v3d(0,0,0), bool usecam = false, bool stencil = false);
 	void BlitBitmap(VideoResourceID videoResourceID,		v3d position, v3d size, float rotateangle = 0, v3d pivot = v3d(0,0,0), bool usecam = false, bool stencil = false);
 	void BlitBitmapScaled(VideoResourceID videoResourceID,	v3d position, v3d size, float rotateangle = 0, v3d pivot = v3d(0,0,0), bool usecam = false, bool stencil = false);
-	void BlitRect(v3d p1, v3d p2, CColor color);
+	void BlitRect(v3d p1, v3d p2, CColor color1, CColor color2);
 	void DrawLine(short x1, short y1, float zVal1, short x2, short y2, float zVal2, unsigned long color);
 	void DrawLine(v3d start, v3d end, unsigned long color, bool usecam = true);
 	void DrawLineScaled(v3d start, v3d end, unsigned long color, bool usecam = true);
@@ -438,6 +524,14 @@ public:
 	vid_SceneObject* GetLight(short id);
 	void SetLightAmbient(short id, unsigned long ambient);
 	void SetLightDiffuse(short id, unsigned long diffuse);
+	
+	void SetUpProjection2d();
+	void SetUpProjection3d();
+	void ResetProjection();
+	void SetViewport();
+	void SetViewport(CViewport viewport);
+	// gui widget drawing
+	void DrawProgressBar(CRectangle area, float percent, CColor barColor1, CColor barColor2, CColor backgroundColor);
 
 	vid_VCout vcout;
 	CVideoResourceManager VideoResourceManager;

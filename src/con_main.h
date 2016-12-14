@@ -1,8 +1,8 @@
 #include <string>
+#include "CInputSubsystem.h"
 #include "in_event.h"
 #include "m_misc.h"
 #include "math_main.h"
-
 
 using namespace std;
 
@@ -50,7 +50,10 @@ void CON_AddInitAuxFunction(void (* function)(void));
 
 bool CON_StringEvaluatesTrue(string rhs);
 
-unsigned char CON_InputReceiver(in_Event* event);
+//unsigned char CON_InputReceiver(in_Event* event);
+class CInputEvent;
+bool CON_InputReceiver(const CInputEvent& event);
+
 void con_cmd_int_handler(con_Input& input); // handler for int variables
 void con_cmd_float_handler(con_Input& input); // handler for float variables
 void con_cmd_string_handler(con_Input& input); // handler for string variables

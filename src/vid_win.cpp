@@ -508,7 +508,7 @@ void VIDW_DrawModel(const CModel& model)
 	glPushMatrix();
 	glLoadIdentity();
 
-	if(Video.settings.getShScaled())
+	if(Video.settings.getSh())
 		gluPerspective(85.0f, (double)Video.settings.getSw() / (double)Video.settings.getSh(), 2.0f, 1000.0f);
 
 	glMatrixMode(GL_MODELVIEW);
@@ -650,6 +650,7 @@ void VIDW_BlitBitmap(short id, v3d position, v3d size, float rotateangle, v3d pi
 {
 	if(!vidw_initialized)
 		return;
+	
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();										// Store The Projection Matrix
 	glLoadIdentity();

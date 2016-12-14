@@ -41,18 +41,26 @@ void COND_PrintTextBuffer()
 //	vcout.setHeight(12);
 	Video.vcout.setColor(CColor(0.75f, 0.75f, 0.75f));
 	Video.vcout.setPosScaled(v3d(con_textPadding, Video.settings.getShScaled()-ypos*Video.settings.getShScaled()/Video.settings.getSh()));
-	Video.vcout << temp;
+	//Video.vcout << temp;
+	string temp2;
+	//Video.vcout << temp.substr( 0, temp.length()-inputCursor );
+	temp2 = temp.substr( 0, temp.length()-inputCursor );
 	if(drawCursor)
 	{
-		temp = " ";
+		temp2 += "|";
+		//Video.vcout << '|';
+		/*temp = " ";
 		for(int i = 0; i < inputLine.length()-inputCursor; i++)
 		{
 			temp += " ";
 		}
 		temp += '|';
 		Video.vcout.setPosScaled(v3d(con_textPadding-4, Video.settings.getShScaled()-ypos*Video.settings.getShScaled()/Video.settings.getSh()));
-		Video.vcout << temp;
+		Video.vcout << temp;*/
 	}
+	//Video.vcout << temp.substr( temp.length()-inputCursor , temp.length() - inputCursor-1 );
+	temp2 += temp.substr( temp.length()-inputCursor , temp.length() - temp.length()-inputCursor );
+	Video.vcout << temp2;
 
 	ypos -= con_textHeight;
 	for(int i = 1+textBufferDisplayLocation; i < NUM_TEXT_BUFFER_LINES; i++)
@@ -125,7 +133,7 @@ void COND_Draw()
 		p3 = v3d(position.x+size.x, position.y+size.y);
 		p4 = v3d(position.x+size.x, position.y);
 
-		Video.BlitRect(position, position+size, CColor(.35f, .35f, .35f, 0.75f));
+		Video.BlitRect(position, position+size, CColor(.35f, .35f, .35f, 0.75f), CColor(.35f, .35f, .35f, 0.75f));
 	//	Video.BlitRect(v3d(position.x+textpadding-1, -8+position.y+size.y-textpadding-1), v3d(position.x+size.x-textpadding+1, position.y+size.y-textpadding+1), CColor(.5f,.5f,.5f));
 		//Video.DrawTextShit(title, position.x+textpadding, -8+position.y+size.y-textpadding, size.y);
 

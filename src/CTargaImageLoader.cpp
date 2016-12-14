@@ -173,6 +173,118 @@ bool CTargaImageLoader::ReadFromFile(CImage& image, const string filename)
 				break;
 			case 24:
 				{
+					/*if(targaImage.header.imageSpecification.imageDescriptorByte.screenOrigin == 0) // origin is lower left
+					{
+						for(int i = 0; i < targaImage.header.imageSpecification.width * targaImage.header.imageSpecification.height; i++)
+						{
+							bgr888pixel pixel = ((bgr888pixel*)targaImage.imageData)[i];
+							image.buffer[i].components.r = pixel.r;
+							image.buffer[i].components.g = pixel.g;
+							image.buffer[i].components.b = pixel.b;
+						}
+					}
+					else // origin is upper left
+					{*/
+						for(int y = 0; y < targaImage.header.imageSpecification.height; y++)
+						{
+							bgr888pixel pixel;
+							for(int x = 0; x < targaImage.header.imageSpecification.width; x++)
+							{
+								if(targaImage.header.imageSpecification.imageDescriptorByte.screenOrigin == 0) // lower left origin
+									pixel = ((bgr888pixel*)targaImage.imageData)[x+y*targaImage.header.imageSpecification.width];
+								else	// upper left origin
+									pixel = ((bgr888pixel*)targaImage.imageData)[x+(targaImage.header.imageSpecification.height-1-y)*targaImage.header.imageSpecification.width];
+		
+								
+								image.buffer[x+y*targaImage.header.imageSpecification.width].components.r = pixel.r;
+								image.buffer[x+y*targaImage.header.imageSpecification.width].components.g = pixel.g;
+								image.buffer[x+y*targaImage.header.imageSpecification.width].components.b = pixel.b;
+							}
+						}
+						
+					//}
+				}
+				break;
+			case 32:
+				{
+					for(int y = 0; y < targaImage.header.imageSpecification.height; y++)
+					{
+						bgra8888pixel pixel;
+						for(int x = 0; x < targaImage.header.imageSpecification.width; x++)
+						{
+							if(targaImage.header.imageSpecification.imageDescriptorByte.screenOrigin == 0) // lower left origin
+								pixel = ((bgra8888pixel*)targaImage.imageData)[x+y*targaImage.header.imageSpecification.width];
+							else	// upper left origin
+								pixel = ((bgra8888pixel*)targaImage.imageData)[x+(targaImage.header.imageSpecification.height-1-y)*targaImage.header.imageSpecification.width];
+							
+							image.buffer[x+y*targaImage.header.imageSpecification.width].components.r = pixel.components.r;
+							image.buffer[x+y*targaImage.header.imageSpecification.width].components.g = pixel.components.g;
+							image.buffer[x+y*targaImage.header.imageSpecification.width].components.b = pixel.components.b;
+							
+							if(targaImage.header.imageSpecification.imageDescriptorByte.pixelAttributeBits == 8)
+								image.buffer[x+y*targaImage.header.imageSpecification.width].components.a = pixel.components.a;
+							else
+								image.buffer[x+y*targaImage.header.imageSpecification.width].components.a = 255;
+						}
+					}
+				}
+				break;
+			}
+		}
+		break;
+	case 10: // runlength encoded, rgb
+		{
+			switch(targaImage.header.imageSpecification.pixelSize)
+			{
+			case 16:
+				{
+					if(targaImage.header.imageSpecification.imageDescriptorByte.screenOrigin == 0) // origin is lower left
+					{
+						for(int i = 0; i < targaImage.header.imageSpecification.width * targaImage.header.imageSpecification.height; i++)
+						{
+							if(targaImage.header.imageSpecification.imageDescriptorByte.pixelAttributeBits == 1)
+							{
+								bgr555pixel pixel = ((bgr555pixel*)targaImage.imageData)[i];
+								image.buffer[i].components.r = (pixel.components.r * 255)/32;
+								image.buffer[i].components.g = (pixel.components.g * 255)/32;
+								image.buffer[i].components.b = (pixel.components.b * 255)/32;
+							}
+							else
+							{
+								bgr565pixel pixel = ((bgr565pixel*)targaImage.imageData)[i];
+								image.buffer[i].components.r = (pixel.components.r * 255)/32;
+								image.buffer[i].components.g = (pixel.components.g * 255)/32;
+								image.buffer[i].components.b = (pixel.components.b * 255)/32;
+							}
+						}					
+					}
+					else // origin is upper left
+					{
+						for(int y = 0; y < targaImage.header.imageSpecification.height; y++)
+						{
+							for(int x = 0; x < targaImage.header.imageSpecification.width; x++)
+							{
+								if(targaImage.header.imageSpecification.imageDescriptorByte.pixelAttributeBits == 1)
+								{
+									bgr555pixel pixel = ((bgr555pixel*)targaImage.imageData)[x+(targaImage.header.imageSpecification.height-1-y)*targaImage.header.imageSpecification.width];
+									image.buffer[x+y*targaImage.header.imageSpecification.width].components.r = (pixel.components.r * 255)/32;
+									image.buffer[x+y*targaImage.header.imageSpecification.width].components.g = (pixel.components.g * 255)/32;
+									image.buffer[x+y*targaImage.header.imageSpecification.width].components.b = (pixel.components.b * 255)/32;
+								}
+								else
+								{
+									bgr565pixel pixel = ((bgr565pixel*)targaImage.imageData)[x+(targaImage.header.imageSpecification.height-1-y)*targaImage.header.imageSpecification.width];
+									image.buffer[x+y*targaImage.header.imageSpecification.width].components.r = (pixel.components.r * 255)/32;
+									image.buffer[x+y*targaImage.header.imageSpecification.width].components.g = (pixel.components.g * 255)/64;
+									image.buffer[x+y*targaImage.header.imageSpecification.width].components.b = (pixel.components.b * 255)/32;
+								}
+							}
+						}
+					}
+				}
+				break;
+			case 24:
+				{
 					if(targaImage.header.imageSpecification.imageDescriptorByte.screenOrigin == 0) // origin is lower left
 					{
 						for(int i = 0; i < targaImage.header.imageSpecification.width * targaImage.header.imageSpecification.height; i++)
@@ -201,32 +313,24 @@ bool CTargaImageLoader::ReadFromFile(CImage& image, const string filename)
 				break;
 			case 32:
 				{
-					if(targaImage.header.imageSpecification.imageDescriptorByte.screenOrigin == 0) // origin is lower left
+					for(int y = 0; y < targaImage.header.imageSpecification.height; y++)
 					{
-						for(int i = 0; i < targaImage.header.imageSpecification.width * targaImage.header.imageSpecification.height; i++)
+						for(int x = 0; x < targaImage.header.imageSpecification.width; x++)
 						{
-							bgra8888pixel pixel = ((bgra8888pixel*)targaImage.imageData)[i];
-							image.buffer[i].components.r = pixel.components.r;
-							image.buffer[i].components.g = pixel.components.g;
-							image.buffer[i].components.b = pixel.components.b;
-							image.buffer[i].components.a = pixel.components.a;
-						}
-					}
-					else // origin is upper left
-					{
-						for(int y = 0; y < targaImage.header.imageSpecification.height; y++)
-						{
-							for(int x = 0; x < targaImage.header.imageSpecification.width; x++)
-							{
-								bgra8888pixel pixel = ((bgra8888pixel*)targaImage.imageData)[x+(targaImage.header.imageSpecification.height-1-y)*targaImage.header.imageSpecification.width];
-								image.buffer[x+y*targaImage.header.imageSpecification.width].components.r = pixel.components.r;
-								image.buffer[x+y*targaImage.header.imageSpecification.width].components.g = pixel.components.g;
-								image.buffer[x+y*targaImage.header.imageSpecification.width].components.b = pixel.components.b;
-								if(targaImage.header.imageSpecification.imageDescriptorByte.pixelAttributeBits == 8)
-									image.buffer[x+y*targaImage.header.imageSpecification.width].components.a = pixel.components.a;
-								else
-									image.buffer[x+y*targaImage.header.imageSpecification.width].components.a = 255;
-							}
+							bgra8888pixel pixel;
+							if(targaImage.header.imageSpecification.imageDescriptorByte.screenOrigin == 0) // lower left origin
+								pixel = ((bgra8888pixel*)targaImage.imageData)[x+y*targaImage.header.imageSpecification.width];
+							else	// upper left origin
+								pixel = ((bgra8888pixel*)targaImage.imageData)[x+(targaImage.header.imageSpecification.height-1-y)*targaImage.header.imageSpecification.width];
+							
+							image.buffer[x+y*targaImage.header.imageSpecification.width].components.r = pixel.components.r;
+							image.buffer[x+y*targaImage.header.imageSpecification.width].components.g = pixel.components.g;
+							image.buffer[x+y*targaImage.header.imageSpecification.width].components.b = pixel.components.b;
+							
+							if(targaImage.header.imageSpecification.imageDescriptorByte.pixelAttributeBits == 8)
+								image.buffer[x+y*targaImage.header.imageSpecification.width].components.a = pixel.components.a;
+							else
+								image.buffer[x+y*targaImage.header.imageSpecification.width].components.a = 255;
 						}
 					}
 				}

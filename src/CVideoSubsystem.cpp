@@ -2,9 +2,16 @@
 #ifdef WIN32
 #include <windows.h>								// Header File For Windows
 #endif
+
 #include <GL/gl.h>
 #include <GL/glu.h>
-//#include <GL/glaux.h>
+#include <GL/glut.h>
+
+#ifdef WIN32
+#include <SDL.h>								// Header File For Windows
+#else
+#include <SDL/SDL.h>
+#endif
 
 #include "CImage.h"
 #include "CColor.h"
@@ -440,7 +447,7 @@ void CVideoSubsystem::Think()
 	VIDW_UpdateLights();
 }
 
-CRouterReturnCode CVideoSubsystem::EventReceiver(CEvent& event)
+CRouterReturnCode CVideoSubsystem::EventReceiver(CRouterEvent& event)
 {
 	return CRouterReturnCode(true, false);
 }
@@ -512,10 +519,43 @@ void CVideoSubsystem::BlitBitmapScaled(VideoResourceID videoResourceID,	v3d posi
 }
 
 
-void CVideoSubsystem::BlitRect(v3d p1, v3d p2, CColor color)
+void CVideoSubsystem::BlitRect(v3d p1, v3d p2, CColor color1, CColor color2)
 {
 	if(!Video.initialized) return;
-	VIDW_BlitRect(p1,p2,color);
+
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();										// Store The Projection Matrix
+	glLoadIdentity();
+	gluOrtho2D( 0, Video.settings.getSw(), 0, Video.settings.getSh() );
+
+	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+	glPushMatrix();										// Store The Modelview Matrix
+	glLoadIdentity();									// Reset The Modelview Matrix
+
+	glDisable(GL_DEPTH_TEST);							// Disables Depth Testing
+	glEnable(GL_BLEND);
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_LIGHTING);
+
+	glBegin(GL_QUADS);						
+		glColor4f( color1.getRFloat(), color1.getGFloat(), color1.getBFloat(), color1.getAFloat() );
+		glVertex2f(p1.x,p1.y); //0,0
+
+		glVertex2f(p1.x,p2.y); // 0,1
+
+		glColor4f( color2.getRFloat(), color2.getGFloat(), color2.getBFloat(), color2.getAFloat() );
+		glVertex2f(p2.x,p2.y);		// 1,1
+
+		glVertex2f(p2.x,p1.y);	// 1,0
+		glColor3f(1.0f, 1.0f, 1.0f);
+	glEnd();
+
+	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
+
+	glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
+	glPopMatrix();										// Restore The Old Projection Matrix
+	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+	glPopMatrix();										// Restore The Old Projection Matrix
 }
 void CVideoSubsystem::DrawLine(short x1, short y1, float zVal1, short x2, short y2, float zVal2, unsigned long color)
 {
@@ -627,6 +667,117 @@ void CVideoSubsystem::SetLightAmbient(short id, unsigned long ambient)
 void CVideoSubsystem::SetLightDiffuse(short id, unsigned long diffuse)
 {
 }
+
+
+void CVideoSubsystem::SetUpProjection2d()
+{
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();										// Store The Projection Matrix
+	glLoadIdentity();
+	gluOrtho2D( 0, settings.getSw(), 0, settings.getSh() );
+
+	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+	glPushMatrix();										// Store The Modelview Matrix
+	glLoadIdentity();									// Reset The Modelview Matrix
+
+	/*if(usecam)
+	{	
+		glTranslatef(Video.settings.getSw()/2, Video.settings.getSh()/2, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
+		glRotatef(-Video.camera.getAngle().z, 0, 0, 1);
+
+		glTranslatef(pivot.camcoords(Video.camera).x, pivot.camcoords(Video.camera).y, 0);//Video.camPosition.x, Video.camPosition.y, Video.camPosition.z);
+		position.x-=pivot.x;//Video.camPosition.x;
+		position.y-=pivot.y;//Video.camPosition.y;
+		glRotatef(rotateangle, 0, 0, 1);
+	}
+	else
+	{*/
+	/*	glTranslatef(pivot.x, pivot.y, 0);
+		position.x-=pivot.x;
+		position.y-=pivot.y;
+		glRotatef(rotateangle, 0, 0, 1);*/
+	//}
+}
+
+void CVideoSubsystem::SetUpProjection3d()
+{
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+
+	if(Video.settings.getSh())
+		gluPerspective(85.0f, (double)settings.getSw() / (double)settings.getSh(), 2.0f, 1000.0f);
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	/*glRotatef(-camera.getAngle().x,1, 0, 0);
+	glRotatef(-camera.getAngle().y,0, 1, 0);
+	glRotatef(-camera.getAngle().z,0, 0, 1);
+	glTranslatef(-camera.getPosition().x, -camera.getPosition().y, -camera.getPosition().z);*/
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+}
+
+void CVideoSubsystem::ResetProjection()
+{
+	glMatrixMode(GL_PROJECTION);						// Select The Projection Matrix
+	glPopMatrix();										// Restore The Old Projection Matrix
+	glMatrixMode(GL_MODELVIEW);							// Select The Modelview Matrix
+	glPopMatrix();										// Restore The Old Projection Matrix
+}
+
+void CVideoSubsystem::SetViewport()
+{
+	CViewport defaultViewport;
+	defaultViewport.area.leftx = 0;
+	defaultViewport.area.rightx = settings.getSw();
+	defaultViewport.area.topy = settings.getSh();
+	defaultViewport.area.bottomy = 0;
+	defaultViewport.SetUpViewport();
+}
+
+void CVideoSubsystem::SetViewport(CViewport viewport)
+{
+	viewport.SetUpViewport();
+}
+
+void CVideoSubsystem::DrawProgressBar(CRectangle area, float percent, CColor barColor1, CColor barColor2, CColor backgroundColor)
+{
+	SetUpProjection2d();
+
+	CRectangle barArea;
+	barArea = area;
+	barArea.leftx += 1;
+	barArea.topy -= 1;
+	barArea.bottomy += 1;
+	barArea.rightx = area.leftx + (area.rightx-area.leftx)*percent - 1;
+
+	// background
+	Video.BlitRect(area.getLowerLeft(), area.getUpperRight(), backgroundColor, backgroundColor);
+	Video.DrawLine(area.getLowerLeft(), area.getLowerRight(), _RGB32BIT(192, 192, 192), false);
+	Video.DrawLine(area.getUpperLeft(), area.getUpperRight(), _RGB32BIT(64, 64, 64), false);
+	Video.DrawLine(area.getLowerLeft(), area.getUpperLeft(), _RGB32BIT(64, 64, 64), false);
+	Video.DrawLine(area.getLowerRight(), area.getUpperRight(), _RGB32BIT(192, 192, 192), false);
+	
+	// progress bar
+	Video.BlitRect(barArea.getLowerLeft(), barArea.getUpperRight(), barColor1, barColor2);
+	Video.DrawLine(barArea.getLowerLeft(), barArea.getLowerRight(), _RGB32BIT(64, 64, 64), false);
+	Video.DrawLine(barArea.getUpperLeft(), barArea.getUpperRight(), _RGB32BIT(192, 192, 192), false);
+	Video.DrawLine(barArea.getLowerLeft(), barArea.getUpperLeft(), _RGB32BIT(192, 192, 192), false);
+	Video.DrawLine(barArea.getLowerRight(), barArea.getUpperRight(), _RGB32BIT(64, 64, 64), false);
+	
+	Video.vcout.setPos(v3d( area.leftx + (area.rightx-area.leftx)/2, area.bottomy + (area.topy-area.bottomy)/2 - 4));
+	
+	string temp = M_ftoa(percent*100) + "%";
+	Video.vcout.setColor(CColor(1.0f, 1.0f, 1.0f, 1.0f));
+	Video.vcout << temp;
+	
+	ResetProjection();
+}
+
 
 /*
 private:

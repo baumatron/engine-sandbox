@@ -574,7 +574,7 @@ void CON_Exec(string command)
 		}
 		if((!(wasVariable | wasCommand)) /*&& (currentStatement->commandLine != "")*/) 
 		{
-			CEvent event = TokenManager.BuildEventFromString( command );
+			CRouterEvent event = TokenManager.BuildEventFromString( command );
 			if( EventRouter.RouteEvent( event ) )
 				ccout << "Unrecognized command or variable: "<< command << newl;
 		}
@@ -726,6 +726,8 @@ void CON_Init()
 			i->handler();
 	}
 
+	Input.AddInputReceiver(CON_InputReceiver);
+	
 	con_initialized = true;
 }
 
@@ -738,14 +740,29 @@ void CON_Shutdown()
 	commandList = 0;
 }
 
-unsigned char CON_InputReceiver(in_Event* event)
+//unsigned char CON_InputReceiver(in_Event* event)
+bool CON_InputReceiver(const CInputEvent& event)
 {
-	if(!con_initialized) return 0;
+	if(!con_initialized) return false;
+	
+	if(event.inputEventType == IET_STATECHANGE)
+	{
+		if(event.keyAction == IKA_PRESS)
+		{
+			switch(event.keyCode)
+			{
+			case '`':
+				CON_Exec("console");
+				break;
+			}
+		}
+	}
+	
 	if(!consoleDown && !consoleMoving)
-		return 0;
-	if(event->eventType == INEV_MOUSEMOVE)
-		return 0;
-	static float keyHoldStart(0);
+		return false;
+	//if(event->eventType == INEV_MOUSEMOVE)
+	//	return false;
+/*	static float keyHoldStart(0);
 	static unsigned char lastKey(0);
 	bool shifted(false);
 
@@ -769,23 +786,11 @@ unsigned char CON_InputReceiver(in_Event* event)
 		return 1;
 	}
 	if(event->flags & INEVF_SHIFT)
-		shifted = true;
-		/*switch(event->flags)
+		shifted = true;*/
+	if(event.inputEventType == IET_CHARACTERTYPED)
+		switch(event.characterCode) // not really unicode for now... ascii!!!
 		{
-		case INEVF_CTRL:
-			break;
-		case INEVF_ALT:
-			break;
-		case INEVF_SHIFT:
-			shifted = true;
-			break;
-		default:
-			break;
-		}*/
-			
-		switch(event->key)
-		{
-			case INKEY_ENTER:
+			case IKC_RETURN:
 				if(inputLine != "")
 				{
 					if(textBuffer[0] != "")
@@ -799,9 +804,9 @@ unsigned char CON_InputReceiver(in_Event* event)
 					inputLine = "";
 					inputCursor = 0;
 				}
-				return 1;
+				return true;
 				break;
-			case INKEY_BACKSPACE:
+			case IKC_BACKSPACE:
 				if( (inputLine.length() > 0))
 				{
 					//inputLine = "hello";
@@ -811,9 +816,9 @@ unsigned char CON_InputReceiver(in_Event* event)
 					if(inputCursor >= inputLine.length())
 						inputCursor = inputLine.length();
 				}
-				return 1;
+				return true;
 				break;
-			case INKEY_DEL:
+			case IKC_DELETE:
 				{
 					if(inputCursor < inputLine.length()+1 && inputCursor > 0)
 					{
@@ -823,66 +828,70 @@ unsigned char CON_InputReceiver(in_Event* event)
 					if(inputCursor < 0)
 						inputCursor = 0;
 				}
-				return 1;
+				return true;
 				break;
-			case INKEY_UPARROW:
+			case IKC_UP:
 				useEntryBufferPrev();
 				if(inputLine == "")
 					useEntryBufferNext(); // don't scroll if it's empty
-				return 1;
+				return true;
 				break;
-			case INKEY_DOWNARROW:
+			case IKC_DOWN:
 				useEntryBufferNext();
 				if(inputLine == "")
 					useEntryBufferPrev(); // don't scroll if it's empty
-				return 1;
+				return true;
 				break;
-			case INKEY_LEFTARROW:
+			case IKC_LEFT:
 				{
 					if(inputCursor < inputLine.size())
 						inputCursor++;
-					return 1;
+					return true;
 				}
 				break;
-			case INKEY_RIGHTARROW:
+			case IKC_RIGHT:
 				{
 					if(inputCursor > 0)
 						inputCursor--;
-					return 1;
+					return true;
 				}
 				break;
-			case INKEY_PGUP:
+			case IKC_PAGEUP:
 				textBufferDisplayLocation++;
 				if(textBufferDisplayLocation > NUM_TEXT_BUFFER_LINES-2)
 					textBufferDisplayLocation = NUM_TEXT_BUFFER_LINES-2; // 2 because the location 0 is used for the input line(?) and it's one more than the max index
-				return 1;
+				return true;
 				break;
-			case INKEY_PGDN:
+			case IKC_PAGEDOWN:
 				if(textBufferDisplayLocation != 0)
 					textBufferDisplayLocation--;
-				return 1;
+				return true;
 				break;
 
 			default:
-				if(event->key == INKEY_TAB)
+				/*if(event->key == INKEY_TAB)
 					if(event->flags & INEVF_ALT)
-						return 1;
+						return true;*/
 
-				if(IN_GetCharacter(event->key) == '`')
+				if(/*IN_GetCharacter(event->key) == '`'*/ event.characterCode == '`')
 				{
-					return 0;
+					return false;
 					break;
 				}
-				if(event->key < 128)
+				if(event.characterCode < 128)
 				{
-					if(shifted)
+					string character;
+					character += (char)event.characterCode;
+					inputLine.insert(((signed)inputLine.length())-inputCursor, character);
+					return true;
+					/*if(shifted)
 					{
 						//inputLine += IN_GetShiftedCharacter(event->key);
 						string character;
 						character += IN_GetShiftedCharacter(event->key);
 						inputLine.insert(((signed)inputLine.length())-inputCursor, character);
 
-						return 1;
+						return true;
 						break;
 					}	
 					else
@@ -891,14 +900,14 @@ unsigned char CON_InputReceiver(in_Event* event)
 						string character;
 						character += IN_GetCharacter(event->key);
 						inputLine.insert(((signed)inputLine.length())-inputCursor, character);
-						return 1;
+						return true;
 						break;
-					}
+					}*/
 				} // if event->key < 128
 				break;
 		} // switch event->key
 //	}	
-	return 0; 
+	return false; 
 }
 
 

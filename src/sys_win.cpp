@@ -34,7 +34,7 @@ clock_t startTime;
 
 static void SetupTimeFloat()
 {
-	startTime = clock();
+	startTime = 0;//clock();
 /*	if (!QueryPerformanceFrequency((LARGE_INTEGER *)&sys_ticks_per_sec))
 	{ // no performance counter available
 		sys_MMTimerStart = timeGetTime();
@@ -93,37 +93,7 @@ int main(int argc, char *argv[])
 
 	while(!quit)
 	{
-		SDL_Event event;
-		while(SDL_PollEvent(&event)) 
-		{
-			switch( event.type ) 
-			{
-				case SDL_QUIT:
-					{
-						quit = true;
-						printf("Got quit event!\n");
-					}
-					break;
-				case SDL_KEYDOWN:
-					{
-						switch(event.key.keysym.sym)
-						{
-						case '`':
-							CON_Exec("console");
-							break;
-						case 'q':
-							quit = true;
-							break;
-						}
-						//printf("Key hit - exiting!\n");
-						//quit = true;					
-					}
-					break;
-			}
-		}  
-
 		SYS_Frame();     
-
 	} // end while
 
 	SYS_Shutdown();

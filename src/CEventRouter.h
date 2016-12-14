@@ -3,7 +3,7 @@
 #define CEVENTROUTER_H
 
 #include "con_main.h"
-#include "CEvent.h"
+#include "CRouterEvent.h"
 #include "ISubsystem.h"
 #include "CSoundSubsystem.h"
 #include <string>
@@ -48,7 +48,7 @@ class CEventRouter
 public:
 	CEventRouter();
 
-	bool RouteEvent(CEvent& event);
+	bool RouteEvent(CRouterEvent& event);
 private:
 	ISubsystem* pVideo;
 	ISubsystem* pSound;

@@ -183,7 +183,7 @@ public:
 		{
 		case vector:
 			{
-				Video.BlitRect(p1, p3, CColor(.4f, .4f, .4f));
+				Video.BlitRect(p1, p3, CColor(.4f, .4f, .4f), CColor(.4f, .4f, .4f));
 				switch(state)
 				{
 				case up:

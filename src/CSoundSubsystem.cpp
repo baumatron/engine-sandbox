@@ -40,7 +40,7 @@ public:
 	virtual bool Initialize();
 	virtual bool Shutdown();
 
-	virtual bool EventReceiver(CEvent& event);
+	virtual bool EventReceiver(CRouterEvent& event);
 
 ////////////////////////
 	short LoadSound(string filename);
@@ -101,7 +101,7 @@ bool CSoundSubsystem::Shutdown()
 	return true;
 }
 
-CRouterReturnCode CSoundSubsystem::EventReceiver(CEvent& event)
+CRouterReturnCode CSoundSubsystem::EventReceiver(CRouterEvent& event)
 {
 	unsigned int eventNumber = event.m_data[0];
 

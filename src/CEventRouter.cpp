@@ -14,7 +14,7 @@ CEventRouter::CEventRouter():
 }
 
 
-bool CEventRouter::RouteEvent(CEvent& event)
+bool CEventRouter::RouteEvent(CRouterEvent& event)
 {
 	unsigned int eventNumber = event.m_data[0];
 

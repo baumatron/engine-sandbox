@@ -1,6 +1,6 @@
 
 
-#include "CEvent.h"
+#include "CRouterEvent.h"
 #include "CEventRouter.h"
 
 #ifndef ISUBSYSTEM_H
@@ -19,7 +19,7 @@ public:
 	virtual bool Initialize() = 0;
 	virtual bool Shutdown() = 0;
 
-	virtual CRouterReturnCode EventReceiver(CEvent& event) = 0;
+	virtual CRouterReturnCode EventReceiver(CRouterEvent& event) = 0;
 };
 
 class IThinkSubsystem: public ISubsystem

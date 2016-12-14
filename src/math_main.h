@@ -93,6 +93,41 @@ extern const v3d nothing;
 
 con_Cout& operator<<(con_Cout& out, const v3d& rhs);
 
+class CRectangle
+{
+public:
+	CRectangle():
+		leftx(0),
+		bottomy(0),
+		rightx(0),
+		topy(0){}
+	CRectangle(float _leftx, float _bottomy, float _rightx, float _topy):
+		leftx(_leftx),
+		bottomy(_bottomy),
+		rightx(_rightx),
+		topy(_topy){}
+		
+	v3d getLowerLeft()
+	{
+		return v3d(leftx, bottomy);
+	}
+	v3d getUpperLeft()
+	{
+		return v3d(leftx, topy);
+	}
+	v3d getUpperRight()
+	{
+		return v3d(rightx, topy);
+	}
+	v3d getLowerRight()
+	{
+		return v3d(rightx, bottomy);
+	}	
+	
+	float leftx, bottomy, rightx, topy;
+private:
+};
+
 class quaternion;
 
 class matrix4x4

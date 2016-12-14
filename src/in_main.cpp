@@ -287,7 +287,7 @@ void IN_Init()
 
 	IN_AddReceiver(BND_InputReceiver);
 	IN_AddReceiver(GUI_InputReceiver);
-	IN_AddReceiver(CON_InputReceiver);
+//	IN_AddReceiver(CON_InputReceiver);
 	IN_AddReceiver(SYS_InputReceiver); // 1st receiver
 
 	in_initialized = true;

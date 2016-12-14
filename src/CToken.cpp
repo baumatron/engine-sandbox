@@ -1,6 +1,6 @@
 
 #include "CToken.h"
-#include "CEvent.h"
+#include "CRouterEvent.h"
 #include "con_main.h"
 #include "m_misc.h"
 #include <stack>
@@ -148,9 +148,9 @@ CToken CTokenManager::GetSingleTokenByLabel(string label, unsigned int section_i
 }
 
 
-CEvent CTokenManager::BuildEventFromString(string source)
+CRouterEvent CTokenManager::BuildEventFromString(string source)
 {
-	CEvent result;
+	CRouterEvent result;
 	result.m_data[0] = 0;
 
 	string currentToken;

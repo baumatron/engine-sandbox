@@ -4,7 +4,8 @@
 #include "sys_win.h"
 #include "con_main.h"
 #include "con_display.h"
-#include "in_main.h"
+//#include "in_main.h"
+#include "CInputSubsystem.h"
 #include "m_misc.h"
 #include "CVideoSubsystem.h"
 #include "bnd_main.h"
@@ -17,7 +18,7 @@
 #include "CModel.h"
 #include "CMilkShapeModel.h"
 #include "IModelLoader.h"
-#include "CEvent.h"
+#include "CRouterEvent.h"
 #include "CEventRouter.h"
 #include "CToken.h"
 #include "CBitmapImageLoader.h"
@@ -56,14 +57,14 @@ con_Command con_cmd_reset("reset", con_cmd_reset_handler);
 static void UpdateFrameTimes()
 {
 	sys_curTime = M_TimeFloat() - sys_baseTime;
-	sys_frameTime = sys_curTime - sys_lastTime;
+	sys_frameTime = 1.0f/75.0f;/*sys_curTime - sys_lastTime;*/
 	sys_lastTime = sys_curTime;
 }
 
 
 static void ResetFrameTimes()
 {
-	sys_baseTime = M_TimeFloat();
+	sys_baseTime = 0;//M_TimeFloat();
 	sys_lastTime = sys_curTime = sys_frameTime = 0.0;
 }
 VideoResourceID targaFileSystem, targaFileVideo;
@@ -117,7 +118,7 @@ void SYS_Init()
 
 	Sound.LoadSound("data/sounds/menkey.wav", false);
 	Sound.LoadSound("data/sounds/pain_shot1.wav", false);
-	CEvent event;
+	CRouterEvent event;
 
 	event = TokenManager.BuildEventFromString("local.sound.play(2)");
 
@@ -174,8 +175,10 @@ void SYS_Frame()
 
 
 	Video.camera.update();
+	
+	Input.Think();
 
-	IN_Update();
+	//IN_Update();
 
 	GUI_Update();
 
@@ -205,6 +208,13 @@ void SYS_Frame()
 		text[i-32] = char(i);
 	vcout << text;*/
 
+	/*CViewport port;
+	port.area.leftx = 100;
+	port.area.rightx = 400;
+	port.area.bottomy = 100;
+	port.area.topy = 400;
+	Video.SetViewport( port );*/
+	
 	GUI_Draw(ingame);
 
 	//Video.DrawModel(model);
@@ -216,15 +226,32 @@ void SYS_Frame()
 
 	Video.DrawTextShit("FPS: " + M_ftoa(1.0f/sys_frameTime), Video.settings.getSw()-80, 16, 0);
 	CImage* image = Video.VideoResourceManager.GetImageFromSystemMemory(targaFileSystem);
-	Video.BlitBitmap(targaFileVideo, 0, v3d(400,400));
-	Video.BlitBitmap(targaFileVideo, v3d(133,133), v3d(400,400));
+	/*Video.BlitBitmap(targaFileVideo, 0, v3d(400,400));
+	Video.BlitBitmap(targaFileVideo, v3d(133,133), v3d(400,400));*/
 	//Video.BlitBitmap(targaFile, v3d(133,133), v3d(image->GetWidth(), image->GetHeight()));
 	//Video.BlitBitmap((unsigned long*)image->GetBuffer(), 0, v3d(image->GetWidth(), image->GetHeight()));
 	//Video.BlitBitmap((unsigned long*)image->GetBuffer(), v3d(133,133), v3d(image->GetWidth(), image->GetHeight()));
 //	ccout << M_ftoa(1.0f/sys_frameTime) << newl;
 	// view drawn above here
 	// draw console
-
+	
+	CViewport viewport;
+	viewport.area.leftx = 50;
+	viewport.area.rightx = Video.settings.getSw();
+	viewport.area.bottomy = 50;
+	viewport.area.topy = Video.settings.getSh();
+	CRectangle area;
+	area.leftx = 0;
+	area.rightx = 100;
+	area.bottomy = 0;
+	area.topy = 20;
+	static double percent(0.0f);
+	Video.SetViewport( viewport );
+	Video.DrawProgressBar( area, percent, CColor(1.0f, 1.0f, 1.0f, 1.0f), CColor(0.2f, 0.5f, 0.6f, 1.0f), CColor(0.35f, 0.35f, 0.35f, 1.0f) );
+	Video.SetViewport();
+	percent += 0.001f;
+	if(percent > 1.00f)
+		percent = 0.0f;
 	COND_Draw();
 
 

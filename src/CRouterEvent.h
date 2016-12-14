@@ -8,7 +8,7 @@ using namespace std;
 #define EVENT_SIZE 32
 
 
-class CEventArguments
+class CRouterEventArguments
 {
 public:
 	bool MatchesFormat(M_DataTypes args0)
@@ -45,10 +45,10 @@ public:
 	//queue<CGenericType> m_list;	
 };
 
-class CEvent
+class CRouterEvent
 {
 public:
-	CEvent(){m_data[0] = 0;}
+	CRouterEvent(){m_data[0] = 0;}
 
 	char GetChar()
 	{
@@ -75,7 +75,7 @@ public:
 	}
 
 	int m_data[EVENT_SIZE]; // event data
-	CEventArguments m_arguments;
+	CRouterEventArguments m_arguments;
 };
 
 

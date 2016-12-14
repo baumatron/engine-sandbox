@@ -1,7 +1,7 @@
 #ifndef CTOKEN_H
 #define CTOKEN_H
 
-#include "CEvent.h"
+#include "CRouterEvent.h"
 #include <string>
 #include <vector>
 using namespace std;
@@ -36,7 +36,7 @@ public:
 	vector<CToken> GetTokenByLabel(string label, unsigned int section_id = 0, bool beginsWith = false);
 	CToken GetSingleTokenByLabel(string label, unsigned int section_id = 0);
 
-	CEvent BuildEventFromString(string source);
+	CRouterEvent BuildEventFromString(string source);
 
 private:
 	vector<CToken> tokens;

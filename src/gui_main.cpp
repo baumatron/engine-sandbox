@@ -583,8 +583,8 @@ void gui_Window::draw(DrawingModes mode, int _layer)
 	p3 = v3d(position.x+size.x, position.y+size.y);
 	p4 = v3d(position.x+size.x, position.y);
 
-	Video.BlitRect(position, position+size, CColor(.35f, .35f, .35f));
-	Video.BlitRect(v3d(position.x+textpadding-1, -8+position.y+size.y-textpadding-1), v3d(position.x+size.x-textpadding+1, position.y+size.y-textpadding+1), CColor(.5f,.5f,.5f));
+	Video.BlitRect(position, position+size, CColor(.35f, .35f, .35f), CColor(.35f, .35f, .35f));
+	Video.BlitRect(v3d(position.x+textpadding-1, -8+position.y+size.y-textpadding-1), v3d(position.x+size.x-textpadding+1, position.y+size.y-textpadding+1), CColor(.5f,.5f,.5f), CColor(.5f,.5f,.5f));
 	//Video.DrawTextShit(title, position.x+textpadding, -8+position.y+size.y-textpadding, size.y);
 	Video.vcout.setPos(v3d(position.x+textpadding, -8+position.y+size.y-textpadding));
 	Video.vcout << title;
@@ -594,7 +594,7 @@ void gui_Window::draw(DrawingModes mode, int _layer)
 	Video.DrawLine(p1, p2, _RGB32BIT(192, 192, 192), false);
 	Video.DrawLine(p4, p3, _RGB32BIT(64, 64, 64), false);
 	
-	Video.BlitRect(p1 + v3d(borderpadding, borderpadding), p3 + v3d(-borderpadding, -titlepadding), CColor(.4f, .4f, .4f));
+	Video.BlitRect(p1 + v3d(borderpadding, borderpadding), p3 + v3d(-borderpadding, -titlepadding), CColor(.4f, .4f, .4f), CColor(.4f, .4f, .4f));
 	Video.DrawLine(p1 + v3d(borderpadding, borderpadding), p4 + v3d(-borderpadding, borderpadding), _RGB32BIT(192,192,192), false);
 	Video.DrawLine(p2 + v3d(borderpadding, -titlepadding), p3 + v3d(-borderpadding, -titlepadding), _RGB32BIT(64,64,64), false);
 	Video.DrawLine(p1 + v3d(borderpadding, borderpadding), p2 + v3d(borderpadding, -titlepadding), _RGB32BIT(64,64,64), false);
